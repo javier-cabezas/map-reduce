@@ -1,0 +1,148 @@
+#ifndef GMAP_MAPREDUCE_RANGE_
+#define GMAP_MAPREDUCE_RANGE_
+
+#include <cassert>
+#include <initializer_list>
+
+template <typename T = int>
+struct dim_type
+{
+    T begin;
+    T end;
+             
+    T step;
+
+    dim_type() :
+        begin(0),
+        end(0),
+        step(0)
+    {
+    }
+
+    dim_type(std::initializer_list<T> l)
+    {
+        if (l.size() == 1) {
+            begin = 0;
+            end   = *l.begin();
+            step  = 1;
+        } else if (l.size() == 2) {
+            begin = *l.begin();
+            end   = *l.begin();
+            step  = 1;
+        } else if (l.size() == 3) {
+            begin = *l.begin();
+            end   = *l.begin();
+            step  = *l.begin();
+        }
+    }
+
+
+    dim_type(T _begin, T _end, T _step = 1) :
+        begin(_begin),
+        end(_end),
+        step(_step)
+    {
+    }
+
+    dim_type(T _end) :
+        begin(0),
+        end(_end),
+        step(1)
+    {
+    }
+
+    dim_type &operator=(const dim_type &d)
+    {
+        begin = d.begin;
+        end   = d.end;
+        step  = d.step;
+    }
+};
+
+typedef dim_type<int> dim;
+
+template <typename T>
+struct iterator {
+    const dim_type<T> &dim_;
+    T t_;
+
+    iterator(const dim_type<T> &dim) :
+        dim_(dim),
+        t_(dim.begin)
+    {
+    }
+
+    iterator &operator++()
+    {
+        t_ += dim_.step;
+    }
+
+    operator bool() const
+    {
+        return t_ < dim_.end;
+    }
+
+    T operator*() const
+    {
+        return t_;
+    }
+};
+
+template <unsigned _NDims, typename T = int>
+struct extent {
+
+public:
+    typedef T type;
+    static const unsigned NDims = _NDims;
+
+private:
+    dim_type<T> dims_[NDims];
+
+    void
+    init_extent(const dim_type<T>& d)
+    {
+        dims_[NDims - 1] = d;
+    }
+
+    template <typename... Dims>
+    void
+    init_extent(const dim_type<T>& d, const Dims &... dims)
+    {
+        dims_[NDims - sizeof...(Dims) - 1] = d;
+        init_extent(dims...);
+    }
+public:
+    template <typename... Dims>
+    extent(const Dims &... dims)
+    {
+        static_assert(NDims == sizeof...(Dims), "Dimensions should match");
+
+        init_extent(dims...);
+    }
+
+    extent(std::initializer_list<T> list)
+    {
+        assert(NDims == list.size());
+
+        unsigned idx = 0;
+        for (auto d : list) {
+            dims_[idx++] = d;
+        }
+    }
+
+    const dim_type<T>& get_dim(unsigned ndim) const
+    {
+        return dims_[ndim];
+    }
+};
+
+template <typename... Dims>
+extent<sizeof...(Dims)>
+make_extent(const Dims &... dims)
+{
+    return extent<sizeof...(Dims)>(dims...);
+}
+
+#endif
+
+/* vim:set ft=cpp backspace=2 tabstop=4 shiftwidth=4 textwidth=120 foldmethod=marker expandtab: */

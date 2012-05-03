@@ -1,0 +1,156 @@
+#ifndef GMAP_MAPREDUCE_
+#define GMAP_MAPREDUCE_
+
+#include <compiler>
+#include <ndarray>
+#include <range>
+
+template <unsigned Level, typename Func, typename Extent>
+struct wrapper {
+
+template<typename... Args>
+void static map(Func f, const Extent &r, Args &&... args)
+{
+    typedef iterator<typename Extent::type> myit;
+    typedef dim_type<typename Extent::type> mydim;
+
+    mydim d = r.get_dim(sizeof...(Args));
+
+    for (typename Extent::type t  = d.begin;
+                              t  < d.end;
+                              t += d.step) {
+        wrapper<Level - 1, Func, Extent>::map(f, r, args..., t);
+    }
+}
+
+
+void static map(Func f, const Extent &r)
+{
+    typedef iterator<typename Extent::type> myit;
+    typedef dim_type<typename Extent::type> mydim;
+
+    mydim d = r.get_dim(0);
+
+    #pragma omp parallel for
+    for (typename Extent::type t  = d.begin;
+                              t  < d.end;
+                              t += d.step) {
+        wrapper<Level - 1, Func, Extent>::map(f, r, t);
+    }
+}
+
+};
+
+
+template <typename Func, typename Extent>
+struct wrapper<0, Func, Extent> {
+
+template<typename... Args>
+void static map(Func f, const Extent &r, Args &&... args)
+{
+    f(args...);
+}
+
+};
+
+template <typename Func, typename Extent>
+static
+void map(Func f, const Extent &r)
+{
+    wrapper<Extent::NDims, Func, Extent>::map(f, r);
+}
+
+template <typename Func, typename T>
+static
+void map(Func f, const dim_type<T>& d)
+{
+    wrapper<1, Func, extent<1, T> >::map(f, make_extent(d));
+}
+
+template <typename Func, typename T, typename... Dims>
+static
+void map(Func f, const dim_type<T>& d, const Dims &... dims)
+{
+    wrapper<1, Func, extent<1 + sizeof...(Dims), T> >::map(f, make_extent(d, dims...));
+}
+
+#if 0
+template <typename Func, typename... Dims>
+static
+void map(Func f, const Dims &... dims)
+{
+    wrapper<sizeof...(Dims), Func, extent<sizeof...(Dims), int> >::map(f, make_extent(dims...));
+}
+#endif
+
+template <typename Func>
+static
+void independent(unsigned a, Func f)
+{
+    for (unsigned i = 0; i < a; i++) {
+        f(i);
+    }
+}
+
+template <typename Func>
+static inline
+void independent(unsigned a, unsigned b, const Func &f)
+{
+    #pragma omp parallel for
+    for (unsigned i = 0; i < a; i++) {
+        for (unsigned j = 0; j < b; j++) {
+            f(i, j);
+        }
+    }
+}
+
+template <typename Func>
+static
+void independent(unsigned a, unsigned b, unsigned c, Func f)
+{
+    for (unsigned i = 0; i < a; i++) {
+        #pragma omp parallel for
+        for (unsigned j = 0; j < b; j++) {
+            for (unsigned k = 0; k < c; k++) {
+                f(i, j, k);
+            }
+        }
+    }
+}
+
+template <typename Func>
+static
+void sequential(unsigned a, Func f)
+{
+    for (unsigned i = 0; i < a; i++) {
+        f(i);
+    }
+}
+
+template <typename Func>
+static
+void sequential(unsigned a, unsigned b, Func f)
+{
+    for (unsigned i = 0; i < a; i++) {
+        for (unsigned j = 0; j < b; j++) {
+            f(i, j);
+        }
+    }
+}
+
+template <typename Func>
+static
+void sequential(unsigned a, unsigned b, unsigned c, Func f)
+{
+    for (unsigned i = 0; i < a; i++) {
+        for (unsigned j = 0; j < b; j++) {
+            for (unsigned k = 0; k < c; k++) {
+                f(i, j, k);
+            }
+        }
+    }
+}
+
+#endif
+
+/* vim:set ft=cpp backspace=2 tabstop=4 shiftwidth=4 textwidth=120 foldmethod=marker expandtab: */

@@ -1,0 +1,9 @@
+#ifndef GMAC_COMPILER_
+#define GMAC_COMPILER_
+
+#ifndef __CUDACC__
+#define __host__
+#define __device__
+#endif
+
+#endif

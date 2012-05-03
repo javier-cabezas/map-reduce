@@ -1,0 +1,212 @@
+#ifndef GMAP_NDARRAY_
+#define GMAP_NDARRAY_
+
+#define nullptr 0
+
+#include <type_traits>
+#include <utility>
+
+template <typename T>
+class container {
+protected:
+    unsigned long total_size_;
+
+    inline
+    explicit container(T *data) :
+        data_(data)
+    {
+    }
+public:
+    T *data_;
+};
+
+template <typename T, unsigned DIM_SUB, unsigned NDIMS>
+class common_subarray :
+    public container<T> {
+
+    friend class common_subarray<T, DIM_SUB - 1, NDIMS>;
+
+protected:
+    unsigned dim_sizes_[NDIMS];
+    unsigned next_offs_[NDIMS - 1];
+
+    common_subarray(common_subarray<T, DIM_SUB + 1, NDIMS> &parent, T *data) :
+        container<T>(data)
+    {
+        for (unsigned i = NDIMS - DIM_SUB; i < NDIMS; i++) {
+            dim_sizes_[i] = parent.dim_sizes_[i + 1];
+        }
+
+        for (unsigned i = NDIMS - DIM_SUB; i < NDIMS - 1; i++) {
+            next_offs_[i] = parent.next_offs_[i + 1];
+        }
+    }
+
+    inline
+    common_subarray() :
+        container<T>(nullptr)
+    {
+    }
+
+public:
+    inline
+    unsigned dim_size(unsigned dim) const
+    {
+        return dim_sizes_[(NDIMS - DIM_SUB) + dim];
+    }
+
+};
+
+template <typename T, unsigned DIM_SUB, unsigned NDIMS>
+class subarray :
+    public common_subarray<T, DIM_SUB, NDIMS> {
+
+protected:
+    inline
+    subarray(subarray<T, DIM_SUB + 1, NDIMS> &parent, T *data) :
+        common_subarray<T, DIM_SUB, NDIMS>(parent, data)
+    {
+    }
+
+    inline
+    subarray() :
+        common_subarray<T, DIM_SUB, NDIMS>()
+    {
+    }
+
+public:
+    inline
+    subarray<T, DIM_SUB - 1, NDIMS> operator[](unsigned idx)
+    {
+        //printf("Subarray at: %p\n", &container<T>::data_[idx * next_off_]);
+        return subarray<T, DIM_SUB - 1, NDIMS>(*this, &container<T>::data_[idx * (this->next_offs_[NDIMS - DIM_SUB])]);
+    }
+};
+
+template <typename T, unsigned NDIMS>
+class subarray<T, 1, NDIMS> :
+    public common_subarray<T, 1, NDIMS> {
+
+    friend class subarray<T, 2, NDIMS>;
+
+protected:
+    inline
+    subarray(subarray<T, 2, NDIMS> &parent, T *data) :
+        common_subarray<T, 1, NDIMS>(parent, data)
+    {
+    }
+
+    inline
+    subarray() :
+        common_subarray<T, 1, NDIMS>()
+    {
+    }
+
+public:
+    inline
+    T &operator[](unsigned idx)
+    {
+        return container<T>::data_[idx];
+    }
+
+    inline
+    const T &operator[](unsigned idx) const
+    {
+        return container<T>::data_[idx];
+    }
+};
+
+template <typename T, unsigned NDIMS>
+class ndarray : 
+    public subarray<T, NDIMS, NDIMS> {
+public:
+    template <typename... SIZES>
+    ndarray(SIZES... sizes)
+    {
+        static_assert(NDIMS > 0, "Number of dimensions must be greater than 0");
+        static_assert(NDIMS == sizeof...(SIZES), "Number of dimensions do not match");
+
+        container<T>::total_size_ = 1;
+
+        init_ndarray(0, sizes...);
+    }
+
+    inline
+    ~ndarray()
+    {
+        delete [] container<T>::data_;
+    } 
+    
+private:
+    void init_ndarray(unsigned index, unsigned dim_size)
+    {
+        subarray<T, NDIMS, NDIMS>::dim_sizes_[index] = dim_size;
+        container<T>::total_size_ *= dim_size;
+
+        container<T>::data_ = new T[container<T>::total_size_];
+
+        long unsigned next_off = 1;
+        for (unsigned i = NDIMS - 1; i > 0; i--) {
+            next_off *= subarray<T, NDIMS, NDIMS>::dim_sizes_[i];
+            subarray<T, NDIMS, NDIMS>::next_offs_[i - 1] = next_off;
+        }
+    }   
+    template <typename... D>
+    void init_ndarray(unsigned index, unsigned dim_size, D... dim_sizes)
+    {
+        subarray<T, NDIMS, NDIMS>::dim_sizes_[index] = dim_size;
+        container<T>::total_size_ *= dim_size;
+
+        init_ndarray(index+1, dim_sizes...);
+    }
+};
+
+template <typename T, unsigned Dims>
+struct array_detail
+{
+    static size_t get_elems()
+    {
+        return std::extent<T>::value * array_detail<T, Dims - 1>::get_elems();
+    }
+};
+
+template <typename T>
+struct array_detail<T, 0>
+{
+    static size_t get_elems()
+    {
+        return 1;
+    }
+};
+
+template <typename T>
+struct array
+{
+};
+
+template <typename T, size_t Size>
+struct array<T[Size]>
+{
+    static T
+    (&make())[Size]
+    {
+        return *(
+                 (T(*)[Size])
+                 new T[array_detail<T[Size], std::rank<T[Size]>::value>::get_elems()]
+                 );
+    }
+};
+
+template <typename T>
+using ref = T&;
+
+template <typename T>
+T &
+make_array()
+{
+    return array<T>::make();
+};
+
+#endif
+
+/* vim:set ft=cpp backspace=2 tabstop=4 shiftwidth=4 textwidth=120 foldmethod=marker expandtab: */
