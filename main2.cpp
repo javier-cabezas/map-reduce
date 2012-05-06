@@ -109,10 +109,17 @@ int main(int argc, char *argv[])
 #define C3 1.7f
 #define C4 4.9f
 
+void func(int x, int y)
+{
+}
+
 int main(int argc, char *argv[])
 {
     ref<int[1000][1000]> a = make_array<int[1000][1000]>();
     ref<int[1000][1000]> b = make_array<int[1000][1000]>();
+
+    map(func,
+        1000, 1000);
 
     map([&](int x, int y)
         {

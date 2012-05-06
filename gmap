@@ -17,8 +17,8 @@ void static map(Func f, const Extent &r, Args &&... args)
     mydim d = r.get_dim(sizeof...(Args));
 
     for (typename Extent::type t  = d.begin;
-                              t  < d.end;
-                              t += d.step) {
+                               t  < d.end;
+                               t += d.step) {
         wrapper<Level - 1, Func, Extent>::map(f, r, args..., t);
     }
 }
@@ -33,8 +33,8 @@ void static map(Func f, const Extent &r)
 
     #pragma omp parallel for
     for (typename Extent::type t  = d.begin;
-                              t  < d.end;
-                              t += d.step) {
+                               t  < d.end;
+                               t += d.step) {
         wrapper<Level - 1, Func, Extent>::map(f, r, t);
     }
 }
@@ -71,17 +71,15 @@ template <typename Func, typename T, typename... Dims>
 static
 void map(Func f, const dim_type<T>& d, const Dims &... dims)
 {
-    wrapper<1, Func, extent<1 + sizeof...(Dims), T> >::map(f, make_extent(d, dims...));
+    wrapper<1 + sizeof...(Dims), Func, extent<1 + sizeof...(Dims), T> >::map(f, make_extent(d, dims...));
 }
 
-#if 0
 template <typename Func, typename... Dims>
 static
-void map(Func f, const Dims &... dims)
+void map(Func f, const dim_type<int>& d, const Dims &... dims)
 {
-    wrapper<sizeof...(Dims), Func, extent<sizeof...(Dims), int> >::map(f, make_extent(dims...));
+    map<Func, int, Dims...>(f, d, dims...);
 }
-#endif
 
 template <typename Func>
 static
