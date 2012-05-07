@@ -161,21 +161,21 @@ private:
     }
 };
 
-template <typename T, unsigned Dims>
+template <typename T>
 struct array_detail
 {
-    static size_t get_elems()
+    static T *alloc(size_t elems)
     {
-        return std::extent<T>::value * array_detail<T, Dims - 1>::get_elems();
+        return new T[elems];
     }
 };
 
-template <typename T>
-struct array_detail<T, 0>
+template <typename T, size_t Size>
+struct array_detail<T[Size]>
 {
-    static size_t get_elems()
+    static T *alloc(size_t elems = 1)
     {
-        return 1;
+        return (T *) array_detail<T>::alloc(Size * elems);
     }
 };
 
@@ -191,8 +191,7 @@ struct array<T[Size]>
     (&make())[Size]
     {
         return *(
-                 (T(*)[Size])
-                 new T[array_detail<T[Size], std::rank<T[Size]>::value>::get_elems()]
+                 (T(*)[Size]) array_detail<T[Size]>::alloc()
                  );
     }
 };

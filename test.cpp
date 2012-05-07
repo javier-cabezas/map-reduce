@@ -33,22 +33,22 @@ void func(int x, int y)
 
 int main(int argc, char *argv[])
 {
-    ref<int[1000][1000]> a = make_array<int[1000][1000]>();
-    ref<int[1000][1000]> b = make_array<int[1000][1000]>();
+    static const unsigned N = 1000;
+    static const unsigned M = 1000;
 
-    map(func,
-        1000, 1000);
+    ref<int[N][M]> a = make_array<int[N][M]>();
+    ref<int[N][M]> b = make_array<int[N][M]>();
 
     map([&](int x, int y)
         {
-            if (x == 500) {
+            if (x == N/2 && y == M/2) {
                 a[x][y] = 6969;
             } else {
                 a[x][y] = x;
             }
             b[x][y] = y;
         },
-        1000, 1000);
+        N, M);
 
     int max = reduce(
            [&](int x, int y)
@@ -61,17 +61,17 @@ int main(int argc, char *argv[])
                return tmp;
            },
            0,
-           1000, 1000);
+           N, M);
 
     map([&](int x, int y)
         {
             int tmp = 0;
-            for (unsigned i = 0; i < 1000; ++i) {
+            for (unsigned i = 0; i < N; ++i) {
                 tmp = a[x][i] * b[i][y];
             }
             a[x][y] = tmp;
         },
-        1000, 1000);
+        N, M);
 
     printf("MAX: %d\n", max);
 
