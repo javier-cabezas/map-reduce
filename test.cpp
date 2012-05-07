@@ -19,89 +19,7 @@
  * }}}
  */
 
-#if 0
-
 #include <cstdio>
-
-#include "gmap"
-
-const unsigned a = 1024;
-const unsigned b = 1024;
-
-static float array1[a][b];
-static float array2[a][b];
-
-static float array3[a][b];
-
-#define USE_LAMBDA
-
-int main(int argc, char *argv[])
-{
-#ifdef USE_LAMBDA
-    independent(a, b,
-        [&array1, &array2](unsigned y, unsigned x)
-        {
-#else
-    #pragma omp parallel for
-    for (unsigned y = 0; y < a; y++) {
-        for (unsigned x = 0; x < b; x++) {
-#endif
-            array1[y][x] = y * 10 + x;
-            array2[y][x] = y * 20 + x;
-
-#ifdef USE_LAMBDA
-        });
-#else
-        }
-    }
-#endif
-
-#ifdef USE_LAMBDA
-    independent(a, b,
-        [&array3, &array1, &array2](unsigned y, unsigned x)
-        {
-#else
-    #pragma omp parallel for
-    for (unsigned y = 0; y < a; y++) {
-        for (unsigned x = 0; x < b; x++) {
-#endif
-            float val = 0.f;
-            for (unsigned i = 0; i < a; i++) {
-                 val += array1[y][i] * array2[i][x];
-            }
-            array3[y][x] = val;
-#ifdef USE_LAMBDA
-        });
-#else
-        }
-    }
-#endif
-
-    float accum = 0.f;
-#ifdef USE_LAMBDA
-    sequential(a, b,
-        [&accum, &array3](unsigned y, unsigned x)
-        {
-#else
-    for (unsigned y = 0; y < a; y++) {
-        for (unsigned x = 0; x < b; x++) {
-#endif
-            accum += array3[y][x];
-#ifdef USE_LAMBDA
-        });
-#else
-        }
-    }
-#endif
-
-    printf("Total: %f\n", accum);
-
-    return 0;
-}
-#endif
-
-#include <cstdio>
-#include <range>
 #include <gmap>
 
 #define C1 2.3f
@@ -123,10 +41,27 @@ int main(int argc, char *argv[])
 
     map([&](int x, int y)
         {
-            a[x][y] = x;
+            if (x == 500) {
+                a[x][y] = 6969;
+            } else {
+                a[x][y] = x;
+            }
             b[x][y] = y;
         },
         1000, 1000);
+
+    int max = reduce(
+           [&](int x, int y)
+           {
+               return a[x][y];
+           },
+           [&](int val, int tmp)
+           {
+               if (val > tmp) return val;
+               return tmp;
+           },
+           0,
+           1000, 1000);
 
     map([&](int x, int y)
         {
@@ -137,6 +72,8 @@ int main(int argc, char *argv[])
             a[x][y] = tmp;
         },
         1000, 1000);
+
+    printf("MAX: %d\n", max);
 
     return 0;
 }

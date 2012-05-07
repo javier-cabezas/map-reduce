@@ -1,6 +1,8 @@
 #ifndef GMAP_MAPREDUCE_RANGE_
 #define GMAP_MAPREDUCE_RANGE_
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+
 #include <cassert>
 #include <initializer_list>
 
@@ -142,6 +144,8 @@ make_extent(const Dims &... dims)
 {
     return extent<sizeof...(Dims)>(dims...);
 }
+
+#endif
 
 #endif
 

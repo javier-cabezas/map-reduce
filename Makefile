@@ -1,14 +1,17 @@
 CXXFLAGS=-std=c++0x -g -O3 -I. -fopenmp
-CXX=/usr/lib/gcc-snapshot/bin/g++
+NVCC=nvcc
+BINARIES=test
+all: $(BINARIES)
 
-all: main main2
-
-main2: main2.o
+test: test.o
 	$(CXX) $^ -o $@ -g -fopenmp
 
-main: main.o
-	$(CXX) $^ -o $@ -g -fopenmp
+main_cuda: main_cuda.o
+	g++ $^ -o $@ -g -fopenmp -lcudart
+
+%.o: %.cu
+	$(NVCC) -c $^ -o $@ -g -arch sm_20 -Xcompiler -fopenmp -I.
 
 clean:
-	rm -f *.o main main2
+	rm -f *.o $(BINARIES)
 

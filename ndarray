@@ -1,7 +1,7 @@
 #ifndef GMAP_NDARRAY_
 #define GMAP_NDARRAY_
 
-#define nullptr 0
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
 
 #include <type_traits>
 #include <utility>
@@ -206,6 +206,8 @@ make_array()
 {
     return array<T>::make();
 };
+
+#endif
 
 #endif
 

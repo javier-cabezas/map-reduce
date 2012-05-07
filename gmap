@@ -2,76 +2,166 @@
 #define GMAP_MAPREDUCE_
 
 #include <compiler>
+#include <functional>
+#include <omp.h>
 #include <ndarray>
 #include <range>
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+
+template<typename MembFuncPtr> 
+struct memb_func_traits 
+{}; 
+
+template< typename ClassT, typename R, typename... Arg> 
+struct memb_func_traits<R  ClassT::* (Arg...)> 
+{ 
+     using class_type = ClassT; 
+     using signature = R (Arg...); 
+}; 
+
+template< typename ClassT, typename R, typename... Arg> 
+struct memb_func_traits<R (ClassT::*) (Arg...) const> 
+{ 
+     using class_type = ClassT; 
+     using signature = R (Arg...); 
+}; 
+
+template<typename F> 
+struct reduce_traits { 
+     typedef typename memb_func_traits< 
+                 decltype(&F::operator()) 
+             >::signature signature; 
+
+     typedef std::function<signature> type; 
+     typedef typename std::function<signature>::result_type return_type; 
+}; 
+
 template <unsigned Level, typename Func, typename Extent>
-struct wrapper {
+struct wrapper_map {
+    template<typename... Args>
+    void static map(Func f, const Extent &r, Args &&... args)
+    {
+        typedef iterator<typename Extent::type> myit;
+        typedef dim_type<typename Extent::type> mydim;
 
-template<typename... Args>
-void static map(Func f, const Extent &r, Args &&... args)
-{
-    typedef iterator<typename Extent::type> myit;
-    typedef dim_type<typename Extent::type> mydim;
+        mydim d = r.get_dim(sizeof...(Args));
 
-    mydim d = r.get_dim(sizeof...(Args));
-
-    for (typename Extent::type t  = d.begin;
-                               t  < d.end;
-                               t += d.step) {
-        wrapper<Level - 1, Func, Extent>::map(f, r, args..., t);
+        for (typename Extent::type t  = d.begin;
+                                   t  < d.end;
+                                   t += d.step) {
+            wrapper_map<Level - 1, Func, Extent>::map(f, r, args..., t);
+        }
     }
-}
 
 
-void static map(Func f, const Extent &r)
-{
-    typedef iterator<typename Extent::type> myit;
-    typedef dim_type<typename Extent::type> mydim;
+    void static map(Func f, const Extent &r)
+    {
+        typedef iterator<typename Extent::type> myit;
+        typedef dim_type<typename Extent::type> mydim;
 
-    mydim d = r.get_dim(0);
+        mydim d = r.get_dim(0);
 
-    #pragma omp parallel for
-    for (typename Extent::type t  = d.begin;
-                               t  < d.end;
-                               t += d.step) {
-        wrapper<Level - 1, Func, Extent>::map(f, r, t);
+        #pragma omp parallel for
+        for (typename Extent::type t  = d.begin;
+                                   t  < d.end;
+                                   t += d.step) {
+            wrapper_map<Level - 1, Func, Extent>::map(f, r, t);
+        }
     }
-}
+};
 
+template <typename Func, typename Extent>
+struct wrapper_map<0, Func, Extent> {
+    template<typename... Args>
+    void static map(Func f, const Extent &r, Args &&... args)
+    {
+        f(args...);
+    }
 };
 
 
-template <typename Func, typename Extent>
-struct wrapper<0, Func, Extent> {
+template <unsigned Level, typename Access, typename Func, typename Extent>
+struct wrapper_reduce {
+    template<typename... Args>
+    typename reduce_traits<Func>::return_type static reduce(Access a, Func f, const Extent &r, typename reduce_traits<Func>::return_type &tmp, Args &&... args)
+    {
+        typedef iterator<typename Extent::type> myit;
+        typedef dim_type<typename Extent::type> mydim;
 
-template<typename... Args>
-void static map(Func f, const Extent &r, Args &&... args)
-{
-    f(args...);
-}
+        mydim d = r.get_dim(sizeof...(Args));
 
+        for (typename Extent::type t  = d.begin;
+                                   t  < d.end;
+                                   t += d.step) {
+            tmp = wrapper_reduce<Level - 1, Access, Func, Extent>::reduce(a, f, r, tmp, args..., t);
+        }
+
+        return tmp;
+    }
+
+    typename reduce_traits<Func>::return_type static reduce(Access a, Func f, typename reduce_traits<Func>::return_type init, const Extent &r)
+    {
+        typedef iterator<typename Extent::type> myit;
+        typedef dim_type<typename Extent::type> mydim;
+
+        mydim d = r.get_dim(0);
+
+        typename reduce_traits<Func>::return_type ret = init;
+        size_t steps = (d.end - d.begin) / d.step;
+
+        size_t chunks;
+        if (steps >= omp_get_num_procs()) {
+            chunks = omp_get_num_procs();
+        } else {
+            chunks = 1;
+        }
+        size_t local_steps = steps / chunks;
+
+        #pragma omp parallel for shared(ret)
+        for (size_t i = 0; i < chunks; ++i) {
+            typename reduce_traits<Func>::return_type partial = init;
+            for (typename Extent::type t  = d.begin + i * local_steps;
+                                       t  < d.begin + (i + 1) * local_steps;
+                                       t += d.step) {
+                partial = wrapper_reduce<Level - 1, Access, Func, Extent>::reduce(a, f, r, partial, t);
+            }
+            #pragma omp critical
+            ret = f(partial, ret);
+        }
+
+        return ret;
+    }
+};
+
+template <typename Access, typename Func, typename Extent>
+struct wrapper_reduce<0, Access, Func, Extent> {
+    template<typename... Args>
+    typename reduce_traits<Func>::return_type static reduce(Access a, Func f, const Extent &r, typename reduce_traits<Func>::return_type tmp, Args &&... args)
+    {
+        return f(a(args...), tmp);
+    }
 };
 
 template <typename Func, typename Extent>
 static
 void map(Func f, const Extent &r)
 {
-    wrapper<Extent::NDims, Func, Extent>::map(f, r);
+    wrapper_map<Extent::NDims, Func, Extent>::map(f, r);
 }
 
 template <typename Func, typename T>
 static
 void map(Func f, const dim_type<T>& d)
 {
-    wrapper<1, Func, extent<1, T> >::map(f, make_extent(d));
+    wrapper_map<1, Func, extent<1, T> >::map(f, make_extent(d));
 }
 
 template <typename Func, typename T, typename... Dims>
 static
 void map(Func f, const dim_type<T>& d, const Dims &... dims)
 {
-    wrapper<1 + sizeof...(Dims), Func, extent<1 + sizeof...(Dims), T> >::map(f, make_extent(d, dims...));
+    wrapper_map<1 + sizeof...(Dims), Func, extent<1 + sizeof...(Dims), T> >::map(f, make_extent(d, dims...));
 }
 
 template <typename Func, typename... Dims>
@@ -81,73 +171,50 @@ void map(Func f, const dim_type<int>& d, const Dims &... dims)
     map<Func, int, Dims...>(f, d, dims...);
 }
 
-template <typename Func>
+template <typename Access, typename Func, typename Extent>
 static
-void independent(unsigned a, Func f)
+typename reduce_traits<Func>::return_type reduce(Access a,
+                                                 Func f,
+                                                 typename reduce_traits<Func>::return_type init,
+                                                 const Extent &r)
 {
-    for (unsigned i = 0; i < a; i++) {
-        f(i);
-    }
+    return wrapper_reduce<Extent::NDims, Access, Func, Extent>::reduce(a, f, init, r);
 }
 
-template <typename Func>
-static inline
-void independent(unsigned a, unsigned b, const Func &f)
+template <typename Access, typename Func, typename T>
+static
+typename reduce_traits<Func>::return_type reduce(Access a,
+                                                 Func f,
+                                                 typename reduce_traits<Func>::return_type init,
+                                                 const dim_type<T>& d)
 {
-    #pragma omp parallel for
-    for (unsigned i = 0; i < a; i++) {
-        for (unsigned j = 0; j < b; j++) {
-            f(i, j);
-        }
-    }
+    return wrapper_reduce<1, Access, Func, extent<1, T> >::reduce(a, f, init, make_extent(d));
 }
 
-template <typename Func>
+template <typename Access, typename Func, typename T, typename... Dims>
 static
-void independent(unsigned a, unsigned b, unsigned c, Func f)
+typename reduce_traits<Func>::return_type reduce(Access a,
+                                                 Func f,
+                                                 typename reduce_traits<Func>::return_type init,
+                                                 const dim_type<T>& d,
+                                                 const Dims &... dims)
 {
-    for (unsigned i = 0; i < a; i++) {
-        #pragma omp parallel for
-        for (unsigned j = 0; j < b; j++) {
-            for (unsigned k = 0; k < c; k++) {
-                f(i, j, k);
-            }
-        }
-    }
+    return wrapper_reduce<1 + sizeof...(Dims), Access, Func, extent<1 + sizeof...(Dims), T> >::reduce(a, f, init, make_extent(d, dims...));
 }
 
-template <typename Func>
+template <typename Access, typename Func, typename... Dims>
 static
-void sequential(unsigned a, Func f)
+typename reduce_traits<Func>::return_type reduce(Access a,
+                                                 Func f,
+                                                 typename reduce_traits<Func>::return_type init,
+                                                 const dim_type<int> &d,
+                                                 const Dims &... dims)
 {
-    for (unsigned i = 0; i < a; i++) {
-        f(i);
-    }
+    return reduce<Access, Func, int, Dims...>(a, f, init, d, dims...);
 }
+#else
 
-template <typename Func>
-static
-void sequential(unsigned a, unsigned b, Func f)
-{
-    for (unsigned i = 0; i < a; i++) {
-        for (unsigned j = 0; j < b; j++) {
-            f(i, j);
-        }
-    }
-}
-
-template <typename Func>
-static
-void sequential(unsigned a, unsigned b, unsigned c, Func f)
-{
-    for (unsigned i = 0; i < a; i++) {
-        for (unsigned j = 0; j < b; j++) {
-            for (unsigned k = 0; k < c; k++) {
-                f(i, j, k);
-            }
-        }
-    }
-}
+#endif
 
 #endif
 
