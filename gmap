@@ -37,77 +37,98 @@ struct reduce_traits {
      typedef typename std::function<signature>::result_type return_type; 
 }; 
 
-template <unsigned Level, typename Func, typename Extent>
+template <unsigned Level, typename Func, typename Range>
 struct wrapper_map {
     template<typename... Args>
-    void static map(Func f, const Extent &r, Args &&... args)
+    void static map(Func f, const Range &r, Args &&... args)
     {
-        typedef iterator<typename Extent::type> myit;
-        typedef dim_type<typename Extent::type> mydim;
+        typedef iterator<typename Range::type> myit;
+        typedef dim_type<typename Range::type> mydim;
 
         mydim d = r.get_dim(sizeof...(Args));
 
-        for (typename Extent::type t  = d.begin;
+        for (typename Range::type t  = d.begin;
                                    t  < d.end;
                                    t += d.step) {
-            wrapper_map<Level - 1, Func, Extent>::map(f, r, args..., t);
+            wrapper_map<Level - 1, Func, Range>::map(f, r, args..., t);
         }
     }
 
 
-    void static map(Func f, const Extent &r)
+    void static map(Func f, const Range &r)
     {
-        typedef iterator<typename Extent::type> myit;
-        typedef dim_type<typename Extent::type> mydim;
+        typedef iterator<typename Range::type> myit;
+        typedef dim_type<typename Range::type> mydim;
 
         mydim d = r.get_dim(0);
 
         #pragma omp parallel for
-        for (typename Extent::type t  = d.begin;
+        for (typename Range::type t  = d.begin;
                                    t  < d.end;
                                    t += d.step) {
-            wrapper_map<Level - 1, Func, Extent>::map(f, r, t);
+            wrapper_map<Level - 1, Func, Range>::map(f, r, t);
         }
     }
 };
 
-template <typename Func, typename Extent>
-struct wrapper_map<0, Func, Extent> {
+template <typename Func, typename Range>
+struct wrapper_map<0, Func, Range> {
     template<typename... Args>
-    void static map(Func f, const Extent &r, Args &&... args)
+    void static map(Func f, const Range &r, Args &&... args)
     {
         f(args...);
     }
 };
 
+template <unsigned Level, typename Access, typename Range>
+struct expand {
+    template<typename... Args>
+    typename reduce_traits<Access>::return_type
+    static invoke(Access a, const Range &r, Args &&... args)
+    {
+        return expand<Level - 1, Access, Range>::invoke(a, r, args..., r.get_dim(sizeof...(Args)).begin);
+    }
+};
 
-template <unsigned Level, typename Access, typename Func, typename Extent>
+template <typename Access, typename Range>
+struct expand<0, Access, Range> {
+    template<typename... Args>
+    typename reduce_traits<Access>::return_type
+    static invoke(Access a, const Range &r, Args &&... args)
+    {
+        return a(args...);
+    }
+};
+
+template <unsigned Level, typename Access, typename Func, typename Range>
 struct wrapper_reduce {
     template<typename... Args>
-    typename reduce_traits<Func>::return_type static reduce(Access a, Func f, const Extent &r, typename reduce_traits<Func>::return_type &tmp, Args &&... args)
+    typename reduce_traits<Func>::return_type
+    static reduce(Access a, Func f, const Range &r, typename reduce_traits<Func>::return_type tmp, Args &&... args)
     {
-        typedef iterator<typename Extent::type> myit;
-        typedef dim_type<typename Extent::type> mydim;
+        typedef iterator<typename Range::type> myit;
+        typedef dim_type<typename Range::type> mydim;
 
         mydim d = r.get_dim(sizeof...(Args));
 
-        for (typename Extent::type t  = d.begin;
-                                   t  < d.end;
-                                   t += d.step) {
-            tmp = wrapper_reduce<Level - 1, Access, Func, Extent>::reduce(a, f, r, tmp, args..., t);
+        for (typename Range::type t  = d.begin;
+                                  t  < d.end;
+                                  t += d.step) {
+            tmp = wrapper_reduce<Level - 1, Access, Func, Range>::reduce(a, f, r, tmp, args..., t);
         }
 
         return tmp;
     }
 
-    typename reduce_traits<Func>::return_type static reduce(Access a, Func f, typename reduce_traits<Func>::return_type init, const Extent &r)
+    typename reduce_traits<Func>::return_type
+    static reduce(Access a, Func f, const Range &r)
     {
-        typedef iterator<typename Extent::type> myit;
-        typedef dim_type<typename Extent::type> mydim;
+        typedef iterator<typename Range::type> myit;
+        typedef dim_type<typename Range::type> mydim;
 
         mydim d = r.get_dim(0);
 
-        typename reduce_traits<Func>::return_type ret = init;
+        typename reduce_traits<Func>::return_type ret = expand<Level - 1, Access, Range>::invoke(a, r, d.begin);
         size_t steps = (d.end - d.begin) / d.step;
 
         size_t chunks;
@@ -120,11 +141,11 @@ struct wrapper_reduce {
 
         #pragma omp parallel for shared(ret)
         for (size_t i = 0; i < chunks; ++i) {
-            typename reduce_traits<Func>::return_type partial = init;
-            for (typename Extent::type t  = d.begin + i * local_steps;
-                                       t  < d.begin + (i + 1) * local_steps;
-                                       t += d.step) {
-                partial = wrapper_reduce<Level - 1, Access, Func, Extent>::reduce(a, f, r, partial, t);
+            typename reduce_traits<Func>::return_type partial = expand<Level - 1, Access, Range>::invoke(a, r, d.begin + i * local_steps);
+            for (typename Range::type t  = d.begin + i * local_steps;
+                                      t  < d.begin + (i + 1) * local_steps;
+                                      t += d.step) {
+                partial = wrapper_reduce<Level - 1, Access, Func, Range>::reduce(a, f, r, partial, t);
             }
             #pragma omp critical
             ret = f(partial, ret);
@@ -134,34 +155,34 @@ struct wrapper_reduce {
     }
 };
 
-template <typename Access, typename Func, typename Extent>
-struct wrapper_reduce<0, Access, Func, Extent> {
+template <typename Access, typename Func, typename Range>
+struct wrapper_reduce<0, Access, Func, Range> {
     template<typename... Args>
-    typename reduce_traits<Func>::return_type static reduce(Access a, Func f, const Extent &r, typename reduce_traits<Func>::return_type tmp, Args &&... args)
+    typename reduce_traits<Func>::return_type static reduce(Access a, Func f, const Range &r, typename reduce_traits<Func>::return_type tmp, Args &&... args)
     {
         return f(a(args...), tmp);
     }
 };
 
-template <typename Func, typename Extent>
+template <typename Func, typename Range>
 static
-void map(Func f, const Extent &r)
+void map(Func f, const Range &r)
 {
-    wrapper_map<Extent::NDims, Func, Extent>::map(f, r);
+    wrapper_map<Range::NDims, Func, Range>::map(f, r);
 }
 
 template <typename Func, typename T>
 static
 void map(Func f, const dim_type<T>& d)
 {
-    wrapper_map<1, Func, extent<1, T> >::map(f, make_extent(d));
+    wrapper_map<1, Func, range<1, T> >::map(f, make_range(d));
 }
 
 template <typename Func, typename T, typename... Dims>
 static
 void map(Func f, const dim_type<T>& d, const Dims &... dims)
 {
-    wrapper_map<1 + sizeof...(Dims), Func, extent<1 + sizeof...(Dims), T> >::map(f, make_extent(d, dims...));
+    wrapper_map<1 + sizeof...(Dims), Func, range<1 + sizeof...(Dims), T> >::map(f, make_range(d, dims...));
 }
 
 template <typename Func, typename... Dims>
@@ -171,46 +192,42 @@ void map(Func f, const dim_type<int>& d, const Dims &... dims)
     map<Func, int, Dims...>(f, d, dims...);
 }
 
-template <typename Access, typename Func, typename Extent>
+template <typename Access, typename Func, typename Range>
 static
 typename reduce_traits<Func>::return_type reduce(Access a,
                                                  Func f,
-                                                 typename reduce_traits<Func>::return_type init,
-                                                 const Extent &r)
+                                                 const Range &r)
 {
-    return wrapper_reduce<Extent::NDims, Access, Func, Extent>::reduce(a, f, init, r);
+    return wrapper_reduce<Range::NDims, Access, Func, Range>::reduce(a, f, r);
 }
 
 template <typename Access, typename Func, typename T>
 static
 typename reduce_traits<Func>::return_type reduce(Access a,
                                                  Func f,
-                                                 typename reduce_traits<Func>::return_type init,
                                                  const dim_type<T>& d)
 {
-    return wrapper_reduce<1, Access, Func, extent<1, T> >::reduce(a, f, init, make_extent(d));
+    return wrapper_reduce<1, Access, Func, range<1, T> >::reduce(a, f, make_range(d));
 }
 
 template <typename Access, typename Func, typename T, typename... Dims>
 static
 typename reduce_traits<Func>::return_type reduce(Access a,
                                                  Func f,
-                                                 typename reduce_traits<Func>::return_type init,
                                                  const dim_type<T>& d,
                                                  const Dims &... dims)
 {
-    return wrapper_reduce<1 + sizeof...(Dims), Access, Func, extent<1 + sizeof...(Dims), T> >::reduce(a, f, init, make_extent(d, dims...));
+    return wrapper_reduce<1 + sizeof...(Dims), Access, Func, range<1 + sizeof...(Dims), T> >::reduce(a, f, make_range(d, dims...));
 }
 
 template <typename Access, typename Func, typename... Dims>
 static
 typename reduce_traits<Func>::return_type reduce(Access a,
                                                  Func f,
-                                                 typename reduce_traits<Func>::return_type init,
                                                  const dim_type<int> &d,
                                                  const Dims &... dims)
 {
-    return reduce<Access, Func, int, Dims...>(a, f, init, d, dims...);
+    return reduce<Access, Func, int, Dims...>(a, f, d, dims...);
 }
 #else
 

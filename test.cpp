@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
             }
             b[x][y] = y;
         },
-        N, M);
+        range<2>({N, M}));
 
     int max = reduce(
            [&](int x, int y)
@@ -60,7 +60,6 @@ int main(int argc, char *argv[])
                if (val > tmp) return val;
                return tmp;
            },
-           0,
            N, M);
 
     map([&](int x, int y)

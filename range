@@ -91,7 +91,7 @@ struct iterator {
 };
 
 template <unsigned _NDims, typename T = int>
-struct extent {
+struct range {
 
 public:
     typedef T type;
@@ -101,28 +101,28 @@ private:
     dim_type<T> dims_[NDims];
 
     void
-    init_extent(const dim_type<T>& d)
+    init_range(const dim_type<T>& d)
     {
         dims_[NDims - 1] = d;
     }
 
     template <typename... Dims>
     void
-    init_extent(const dim_type<T>& d, const Dims &... dims)
+    init_range(const dim_type<T>& d, const Dims &... dims)
     {
         dims_[NDims - sizeof...(Dims) - 1] = d;
-        init_extent(dims...);
+        init_range(dims...);
     }
 public:
     template <typename... Dims>
-    extent(const Dims &... dims)
+    range(const Dims &... dims)
     {
         static_assert(NDims == sizeof...(Dims), "Dimensions should match");
 
-        init_extent(dims...);
+        init_range(dims...);
     }
 
-    extent(std::initializer_list<T> list)
+    range(std::initializer_list<T> list)
     {
         assert(NDims == list.size());
 
@@ -139,10 +139,10 @@ public:
 };
 
 template <typename... Dims>
-extent<sizeof...(Dims)>
-make_extent(const Dims &... dims)
+range<sizeof...(Dims)>
+make_range(const Dims &... dims)
 {
-    return extent<sizeof...(Dims)>(dims...);
+    return range<sizeof...(Dims)>(dims...);
 }
 
 #endif
