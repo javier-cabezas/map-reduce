@@ -1,4 +1,4 @@
-CXXFLAGS=-std=c++0x -g -O3 -I. -fopenmp
+CXXFLAGS=-std=c++11 -g -O3 -I. -fopenmp
 NVCC=nvcc
 BINARIES=test
 all: $(BINARIES)

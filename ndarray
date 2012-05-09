@@ -173,9 +173,34 @@ struct array_detail
 template <typename T, size_t Size>
 struct array_detail<T[Size]>
 {
-    static T *alloc(size_t elems = 1)
+    static T *
+    alloc(size_t elems = 1)
     {
         return (T *) array_detail<T>::alloc(Size * elems);
+    }
+};
+
+template <typename T>
+struct array_get
+{};
+
+template <typename T, size_t Size>
+struct array_get<T[Size]>
+{
+    template <typename... Args>
+    static
+    typename std::remove_all_extents<T>::type &
+    get(T (&a)[Size], int i, Args... args)
+    {
+        return array_get<T>::get(a[i], args...);
+    }
+
+    template <typename... Args>
+    static
+    typename std::remove_all_extents<T>::type &
+    get(T (&a)[Size], int i)
+    {
+        return a[i];
     }
 };
 
@@ -184,26 +209,71 @@ struct array
 {
 };
 
-template <typename T, size_t Size>
-struct array<T[Size]>
-{
-    static T
-    (&make())[Size]
-    {
-        return *(
-                 (T(*)[Size]) array_detail<T[Size]>::alloc()
-                 );
-    }
-};
-
 template <typename T>
 using ref = T&;
 
 template <typename T>
-T &
+ref<T> &
+make_array();
+
+#include "range"
+
+template <typename T, size_t Size>
+class array<T[Size]>
+{
+    friend ref<T[Size]> &make_array<T[Size]>();
+
+    T(*data_)[Size];
+
+    static T
+    (*make())[Size]
+    {
+        return (T(*)[Size]) array_detail<T[Size]>::alloc();
+    }
+
+public:
+    array()
+    {
+        data_ = array::make();
+    }
+
+    //typename std::result_of<make_range<T[Size]> >::type range;
+
+    T &operator[](int i)
+    {
+        return (*data_)[i];
+    }
+
+    const T &operator[](int i) const
+    {
+        return (*data_)[i];
+    }
+
+    template <typename... Args>
+    typename std::enable_if<sizeof...(Args) == std::rank<T[Size]>::value,
+                            typename std::remove_all_extents<T>::type &>::type
+    operator ()(Args... args)
+    {
+        //static_assert((sizeof...(Args) + 1) == std::rank<T[Size]>::value, "Wrong number of indexes");
+        return array_get<T[Size]>::get((*data_), args...);
+    }
+
+#if 0
+    template <typename... Args>
+    typename std::remove_extent<T>::type &
+    operator ()(int i)
+    {
+        static_assert(1 == std::rank<T[Size]>::value, "Wrong number of indexes");
+        return (*data_)[i];
+    }
+#endif
+};
+
+template <typename T>
+ref<T> &
 make_array()
 {
-    return array<T>::make();
+    return *array<T>::make();
 };
 
 #endif

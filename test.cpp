@@ -20,15 +20,20 @@
  */
 
 #include <cstdio>
-#include <gmap>
+#include "map"
+#include "reduce"
+
+#include "ndarray"
 
 #define C1 2.3f
 #define C2 3.2f
 #define C3 1.7f
 #define C4 4.9f
 
-void func(int x, int y)
+int func(int x, int y)
 {
+    if (x > y) return x;
+    return y;
 }
 
 int main(int argc, char *argv[])
@@ -36,41 +41,59 @@ int main(int argc, char *argv[])
     static const unsigned N = 1000;
     static const unsigned M = 1000;
 
-    ref<int[N][M]> a = make_array<int[N][M]>();
-    ref<int[N][M]> b = make_array<int[N][M]>();
+    array<int[N][M]> a;
+    array<int[N][M]> b;
 
-    map([&](int x, int y)
+    array<int[N][M]> c;
+
+    map([&](int i, int j)
         {
-            if (x == N/2 && y == M/2) {
-                a[x][y] = 6969;
+            if (i == N/2 && j == M/2) {
+                c[i][j] = 6969;
             } else {
-                a[x][y] = x;
+                c[i][j] = i;
             }
-            b[x][y] = y;
+
+            a[i][j] = i;
+            b[i][j] = j;
         },
-        range<2>({N, M}));
+        range<2>(N, M));
 
-    int max = reduce(
-           [&](int x, int y)
-           {
-               return a[x][y];
-           },
-           [&](int val, int tmp)
-           {
-               if (val > tmp) return val;
-               return tmp;
-           },
-           N, M);
+//#define USE_SPECIALIZED
+//#define USE_LAMBDA
 
-    map([&](int x, int y)
+#ifdef USE_SPECIALIZED
+    int max = reduce_max([&](int i, int j)
+                         {
+                             return c[i][j];
+                         },
+                         make_range(N, M));
+#else
+    int max = reduce([&](int i, int j)
+                     {
+                         return c[i][j];
+                     },
+#ifdef USE_LAMBDA
+                     [&](int val, int tmp)
+                     {
+                         if (val > tmp) return val;
+                         return tmp;
+                     },
+#else
+                     reduce_ops<int>::greater_than,
+#endif
+                     make_range(N, M));
+#endif
+
+    map([&](int i, int j)
         {
             int tmp = 0;
-            for (unsigned i = 0; i < N; ++i) {
-                tmp = a[x][i] * b[i][y];
+            for (unsigned k = 0; k < N; ++k) {
+                tmp = a[i][k] * b[k][j];
             }
-            a[x][y] = tmp;
+            c[i][j] = tmp;
         },
-        N, M);
+        make_range(N, M));
 
     printf("MAX: %d\n", max);
 

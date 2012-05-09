@@ -145,6 +145,13 @@ make_range(const Dims &... dims)
     return range<sizeof...(Dims)>(dims...);
 }
 
+template <typename T, size_t Size>
+range<std::rank<T[Size]>::value, typename std::remove_extent<T>::type>
+make_range()
+{
+    return range<std::rank<T[Size]>::value, typename std::remove_extent<T>::type>
+           (Size, std::extent<T[Size]>::value);
+}
 #endif
 
 #endif

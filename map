@@ -1,0 +1,65 @@
+#ifndef MAPREDUCE_MAP_
+#define MAPREDUCE_MAP_
+
+#include <functional>
+#include <omp.h>
+
+#include "common"
+#include "range"
+
+template <unsigned Level, typename Func, typename Range>
+struct wrapper_map {
+    template<typename... Args>
+    static void
+    map(Func f, const Range &r, Args &&... args)
+    {
+        typedef iterator<typename Range::type> myit;
+        typedef dim_type<typename Range::type> mydim;
+
+        mydim d = r.get_dim(sizeof...(Args));
+
+        for (typename Range::type t  = d.begin;
+                                   t  < d.end;
+                                   t += d.step) {
+            wrapper_map<Level - 1, Func, Range>::map(f, r, args..., t);
+        }
+    }
+
+
+    static void
+    map(Func f, const Range &r)
+    {
+        typedef iterator<typename Range::type> myit;
+        typedef dim_type<typename Range::type> mydim;
+
+        mydim d = r.get_dim(0);
+
+        #pragma omp parallel for
+        for (typename Range::type t  = d.begin;
+                                   t  < d.end;
+                                   t += d.step) {
+            wrapper_map<Level - 1, Func, Range>::map(f, r, t);
+        }
+    }
+};
+
+template <typename Func, typename Range>
+struct wrapper_map<0, Func, Range> {
+    template<typename... Args>
+    static void
+    map(Func f, const Range &r, Args &&... args)
+    {
+        f(args...);
+    }
+};
+
+template <typename Func, typename Range>
+static
+void map(Func f, const Range &r)
+{
+    wrapper_map<Range::NDims, Func, Range>::map(f, r);
+}
+
+#endif
+
+/* vim:set ft=cpp backspace=2 tabstop=4 shiftwidth=4 textwidth=120 foldmethod=marker expandtab: */

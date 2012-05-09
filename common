@@ -1,0 +1,57 @@
+#ifndef MAPREDUCE_COMMON_
+#define MAPREDUCE_COMMON_
+
+#include <functional>
+
+////////////////////////
+// Return type inference
+////////////////////////
+template<typename MembFuncPtr> 
+struct memb_func_traits 
+{
+}; 
+
+template <typename ClassT, typename R, typename... Arg> 
+struct memb_func_traits<R (ClassT::*) (Arg...)> 
+{ 
+     using class_type = ClassT; 
+     using signature = R (Arg...); 
+}; 
+
+template <typename ClassT, typename R, typename... Arg> 
+struct memb_func_traits<R (ClassT::*) (Arg...) const> 
+{ 
+     using class_type = ClassT; 
+     using signature = R (Arg...); 
+}; 
+
+struct OK {};
+
+template <typename F, typename Enable = void> 
+struct reduce_traits;
+
+// Specialization for functors/lambdas
+template <typename F> 
+struct reduce_traits<F, typename std::enable_if<!std::is_pointer<F>::value>::type> {
+     typedef typename memb_func_traits< 
+                 decltype(&F::operator()) 
+             >::signature signature; 
+
+     typedef std::function<signature> type; 
+     typedef typename std::function<signature>::result_type return_type; 
+}; 
+
+// Specialization for function pointers
+template <typename F> 
+struct reduce_traits<F, typename std::enable_if<std::is_pointer<F>::value>::type>
+{
+    static_assert(std::is_function<typename std::remove_pointer<F>::type>::value, "Only pointer to function is valid");
+    typedef typename std::remove_pointer<F>::type signature; 
+
+    typedef std::function<signature> type; 
+    typedef typename std::function<signature>::result_type return_type; 
+}; 
+
+#endif
+
+/* vim:set ft=cpp backspace=2 tabstop=4 shiftwidth=4 textwidth=120 foldmethod=marker expandtab: */

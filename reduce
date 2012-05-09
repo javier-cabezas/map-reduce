@@ -1,0 +1,143 @@
+#ifndef MAPREDUCE_REDUCE_
+#define MAPREDUCE_REDUCE_
+
+#include <functional>
+#include <omp.h>
+
+#include "common"
+#include "range"
+
+template <typename T>
+struct reduce_ops {
+    static T add(T a, T b)
+    {
+        return a + b;
+    }
+
+    static T mul(T a, T b)
+    {
+        return a * b;
+    }
+
+    static T greater_than(T a, T b)
+    {
+        return a > b? a: b;
+    }
+
+    static T less_than(T a, T b)
+    {
+        return a < b? a: b;
+    }
+};
+
+template <unsigned Level, typename Access, typename Range>
+struct invoker {
+    template<typename... Args>
+    static typename reduce_traits<Access>::return_type
+    invoke(Access a, const Range &r, Args &&... args)
+    {
+        return invoker<Level - 1, Access, Range>::invoke(a, r, args..., r.get_dim(sizeof...(Args)).begin);
+    }
+};
+
+template <typename Access, typename Range>
+struct invoker<0, Access, Range> {
+    template<typename... Args>
+    static typename reduce_traits<Access>::return_type
+    invoke(Access a, const Range &r, Args &&... args)
+    {
+        return a(args...);
+    }
+};
+
+template <unsigned Level, typename Ret, typename Access, typename Func, typename Range>
+struct wrapper_reduce {
+    template<typename... Args>
+    static Ret
+    reduce(Access a, Func f, const Range &r, Ret tmp, Args &&... args)
+    {
+        typedef iterator<typename Range::type> myit;
+        typedef dim_type<typename Range::type> mydim;
+
+        mydim d = r.get_dim(sizeof...(Args));
+
+        for (typename Range::type t  = d.begin;
+                                  t  < d.end;
+                                  t += d.step) {
+            tmp = wrapper_reduce<Level - 1, Ret, Access, Func, Range>::reduce(a, f, r, tmp, args..., t);
+        }
+
+        return tmp;
+    }
+
+    static Ret
+    reduce(Access a, Func f, const Range &r)
+    {
+        typedef iterator<typename Range::type> myit;
+        typedef dim_type<typename Range::type> mydim;
+
+        mydim d = r.get_dim(0);
+
+        Ret ret = invoker<Level - 1, Access, Range>::invoke(a, r, d.begin);
+        size_t steps = (d.end - d.begin) / d.step;
+
+        size_t chunks;
+        if (steps >= omp_get_num_procs()) {
+            chunks = omp_get_num_procs();
+        } else {
+            chunks = 1;
+        }
+        size_t local_steps = steps / chunks;
+
+        #pragma omp parallel for shared(ret)
+        for (size_t i = 0; i < chunks; ++i) {
+            Ret partial = invoker<Level - 1, Access, Range>::invoke(a, r, d.begin + i * local_steps);
+            for (typename Range::type t  = d.begin + i * local_steps;
+                                      t  < d.begin + (i + 1) * local_steps;
+                                      t += d.step) {
+                partial = wrapper_reduce<Level - 1, Ret, Access, Func, Range>::reduce(a, f, r, partial, t);
+            }
+            #pragma omp critical
+            ret = f(partial, ret);
+        }
+
+        return ret;
+    }
+};
+
+template <typename Ret, typename Access, typename Func, typename Range>
+struct wrapper_reduce<0, Ret, Access, Func, Range> {
+    template<typename... Args>
+    static Ret
+    reduce(Access a, Func f, const Range &r, Ret tmp, Args &&... args)
+    {
+        return f(a(args...), tmp);
+    }
+};
+
+template <typename Access, typename Func, typename Range>
+static typename reduce_traits<Func>::return_type
+reduce(Access a,
+       Func f,
+       const Range &r)
+{
+    return wrapper_reduce<Range::NDims, typename reduce_traits<Func>::return_type, Access, Func, Range>::reduce(a, f, r);
+}
+
+#define REDUCTION(name,op)                                                                     \
+template <typename Access, typename Range>                                                     \
+typename reduce_traits<Access>::return_type                                                    \
+reduce_##name (Access a,                                                                       \
+               const Range &r)                                                                 \
+{                                                                                              \
+    return reduce(a, reduce_ops<typename reduce_traits<Access>::return_type>::op, r);          \
+}
+
+REDUCTION(min,  less_than)
+REDUCTION(max,  greater_than)
+REDUCTION(sum,  add)
+REDUCTION(prod, mul)
+
+#endif
+
+/* vim:set ft=cpp backspace=2 tabstop=4 shiftwidth=4 textwidth=120 foldmethod=marker invokertab: */
