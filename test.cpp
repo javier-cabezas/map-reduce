@@ -93,7 +93,8 @@ int main(int argc, char *argv[])
             }
             c[i][j] = tmp;
         },
-        make_range(N, M));
+        make_range(N, M),
+        map_sched::parallel<1>());
 
     printf("MAX: %d\n", max);
 

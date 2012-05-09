@@ -7,57 +7,105 @@
 #include "common"
 #include "range"
 
-template <unsigned Level, typename Func, typename Range>
+namespace map_sched {
+    enum base_policy {
+        always,
+        never
+    };
+
+    struct automatic {
+        static const base_policy when = always;
+        static const unsigned level = 0;
+    };
+
+    template <unsigned Level = 0>
+    struct parallel {
+        static const base_policy when = always;
+        static const unsigned level = Level;
+    };
+
+    struct serial {
+        static const base_policy when = never;
+        static const unsigned level = 0;
+    };
+};
+
+template <unsigned Level, typename Func, typename Range, typename Policy>
 struct wrapper_map {
     template<typename... Args>
     static void
-    map(Func f, const Range &r, Args &&... args)
+    map(Func f, const Range &r, const Policy &p, Args &&... args)
     {
         typedef iterator<typename Range::type> myit;
         typedef dim_type<typename Range::type> mydim;
 
         mydim d = r.get_dim(sizeof...(Args));
 
-        for (typename Range::type t  = d.begin;
-                                   t  < d.end;
-                                   t += d.step) {
-            wrapper_map<Level - 1, Func, Range>::map(f, r, args..., t);
+        if (p.when == map_sched::base_policy::always &&
+            p.level == sizeof...(Args)) {
+            #pragma omp parallel for
+            for (typename Range::type t  = d.begin;
+                                      t  < d.end;
+                                      t += d.step) {
+                wrapper_map<Level - 1, Func, Range, Policy>::map(f, r, p, args..., t);
+            }
+        } else {
+            for (typename Range::type t  = d.begin;
+                                      t  < d.end;
+                                      t += d.step) {
+                wrapper_map<Level - 1, Func, Range, Policy>::map(f, r, p, args..., t);
+            }
         }
     }
 
-
     static void
-    map(Func f, const Range &r)
+    map(Func f, const Range &r, const Policy &p)
     {
         typedef iterator<typename Range::type> myit;
         typedef dim_type<typename Range::type> mydim;
 
         mydim d = r.get_dim(0);
 
-        #pragma omp parallel for
-        for (typename Range::type t  = d.begin;
-                                   t  < d.end;
-                                   t += d.step) {
-            wrapper_map<Level - 1, Func, Range>::map(f, r, t);
+        if (p.when == map_sched::base_policy::always &&
+            p.level == 0) {
+            #pragma omp parallel for
+            for (typename Range::type t  = d.begin;
+                                      t  < d.end;
+                                      t += d.step) {
+                wrapper_map<Level - 1, Func, Range, Policy>::map(f, r, p, t);
+            }
+        } else {
+            for (typename Range::type t  = d.begin;
+                                      t  < d.end;
+                                      t += d.step) {
+                wrapper_map<Level - 1, Func, Range, Policy>::map(f, r, p, t);
+            }
         }
     }
 };
 
-template <typename Func, typename Range>
-struct wrapper_map<0, Func, Range> {
+template <typename Func, typename Range, typename Policy>
+struct wrapper_map<0, Func, Range, Policy> {
     template<typename... Args>
     static void
-    map(Func f, const Range &r, Args &&... args)
+    map(Func f, const Range &r, const Policy &p, Args &&... args)
     {
         f(args...);
     }
 };
 
+template <typename Func, typename Range, typename Policy>
+static
+void map(Func f, const Range &r, const Policy &p)
+{
+    wrapper_map<Range::NDims, Func, Range, Policy>::map(f, r, p);
+}
+
 template <typename Func, typename Range>
 static
 void map(Func f, const Range &r)
 {
-    wrapper_map<Range::NDims, Func, Range>::map(f, r);
+    map(f, r, map_sched::automatic());
 }
 
 #endif
