@@ -5,6 +5,7 @@
 
 #include <cstring>
 
+#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -219,10 +220,17 @@ make_array();
 
 #include "range"
 
-template <typename T, size_t Size>
-class array<T[Size]>
+template <typename T>
+class array_ref
 {
-    friend ref<T[Size]> &make_array<T[Size]>();
+};
+
+template <typename T, size_t Size>
+class array<T[Size]>;
+
+template <typename T, size_t Size>
+class array_ref<T[Size]>
+{
 public:
     typedef typename std::remove_all_extents<T[Size]>::type base_type;
     
@@ -230,13 +238,54 @@ public:
     const static size_t elems = array_detail<T[Size]>::elems();
 
 private:
-    T(*data_)[Size];
+    T (*data_)[Size];
+
+public:
+    array_ref(const array<T[Size]> &a);
+
+    array_ref(const array_ref &ref) :
+        data_(ref.data_)
+    {
+    }
+
+    array_ref(T (*ptr)[Size]) :
+        data_(ptr)
+    {
+    }
+
+    T &operator[](int i)
+    {
+        return (*data_)[i];
+    }
+
+    const T &operator[](int i) const
+    {
+        return (*data_)[i];
+    }
+};
+
+template <typename T, size_t Size>
+class array<T[Size]>
+{
+    friend ref<T[Size]> &make_array<T[Size]>();
+    friend class array_ref<T[Size]>;
+
+public:
+    typedef typename std::remove_all_extents<T[Size]>::type base_type;
+    
+    const static size_t dims  = std::rank<T[Size]>::value;
+    const static size_t elems = array_detail<T[Size]>::elems();
+
+private:
+    std::unique_ptr<T[Size]> data_;
 
     static T
     (*make())[Size]
     {
         return (T(*)[Size]) new base_type[elems];
     }
+
+    
 
 public:
     array() :
@@ -247,27 +296,30 @@ public:
     array(const array &a) :
         data_(array::make())
     {
-        ::memcpy(data_, a.data_, array_detail<T[Size]>::elems() * sizeof(array::base_type));
+        ::memcpy(data_.get(), a.data_.get(), array_detail<T[Size]>::elems() * sizeof(array::base_type));
     }
 
     array(array &&a) :
-        data_(a.data_)
+        data_(std::move(a.data_))
     {
-        a.data_ = nullptr;
     }
 
-    ~array()
+    template <typename T2>
+    array_ref<T2> reshape()
     {
-        if (data_) {
-            delete [] data_;
-        }
+        static_assert(elems == array_detail<T2>::elems(),
+                      "Total numer of elements do not match");
+        static_assert(std::is_same<typename std::remove_all_extents<T2>::type,
+                                   base_type>::value,
+                      "Base types do not match");
+        return array_ref<T2>((T2 *) data_.get());
     }
 
     bool operator==(const array &a) const
     {
         if (this != &a) {
-            base_type *linear_current = (base_type *) data_;
-            base_type *linear_other   = (base_type *) a.data_;
+            base_type *linear_current = (base_type *) data_.get();
+            base_type *linear_other   = (base_type *) a.data_.get();
 
             for (long i = 0; i < elems; ++i) {
                 if (linear_current[i] != 
@@ -282,11 +334,21 @@ public:
         }
     }
 
+    // Move assignment operator
     array &operator=(array &&a)
     {
         if (this != &a) {
-            data_ = a.data_;
-            a.data_ = nullptr;
+            data_.reset(a.data_.release());
+        }
+
+        return *this;
+    }
+
+    // Assignment operator
+    array &operator=(const array &a)
+    {
+        if (this != &a) {
+            ::memcpy(data_.get(), a.data_.get(), array_detail<T[Size]>::elems() * sizeof(array::base_type));
         }
 
         return *this;
@@ -321,6 +383,12 @@ public:
     }
 #endif
 };
+
+template <typename T, size_t Size>
+array_ref<T[Size]>::array_ref(const array<T[Size]> &a) :
+    data_(a.data_.get())
+{
+}
 
 template <typename T>
 ref<T> &

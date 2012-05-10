@@ -335,10 +335,20 @@ int test_matrixmul()
     return 0;
 }
 
+int test_ref()
+{
+    array<int[10][1]> a;
+    array_ref<int[10][1]> a_ref(a);
+    array_ref<int[1][10]> b_ref(a.reshape<int[1][10]>());
+
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     test_reduction();
     test_matrixmul();
+    test_ref();
 
     return 0;
 }

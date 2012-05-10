@@ -1,4 +1,9 @@
-CXXFLAGS=-std=c++11 -O3 -Iinclude -fopenmp
+ifeq ($(DEBUG),1)
+	CXXFLAGS=-std=c++11 -O0 -g -Iinclude -fopenmp
+else
+	CXXFLAGS=-std=c++11 -O3 -Iinclude -fopenmp
+endif
+# -ftree-vectorizer-verbose=2
 LDFLAGS=-fopenmp
 NVCC=nvcc
 BINARIES=test
