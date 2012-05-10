@@ -20,10 +20,10 @@
  */
 
 #include <iostream>
-#include "map"
-#include "reduce"
 
-#include "ndarray"
+#include <map-reduce/map>
+#include <map-reduce/ndarray>
+#include <map-reduce/reduce>
 
 #define C1 2.3f
 #define C2 3.2f
