@@ -3,6 +3,8 @@
 
 #include <functional>
 
+namespace map_reduce {
+
 ////////////////////////
 // Return type inference
 ////////////////////////
@@ -51,6 +53,8 @@ struct reduce_traits<F, typename std::enable_if<std::is_pointer<F>::value>::type
     typedef std::function<signature> type; 
     typedef typename std::function<signature>::result_type return_type; 
 }; 
+
+}
 
 #endif
 

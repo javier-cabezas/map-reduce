@@ -95,7 +95,7 @@ struct range {
 
 public:
     typedef T type;
-    static const unsigned NDims = _NDims;
+    const static unsigned NDims = _NDims;
 
 private:
     dim_type<T> dims_[NDims];

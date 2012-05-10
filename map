@@ -7,15 +7,12 @@
 #include "common"
 #include "range"
 
+namespace map_reduce {
+
 namespace map_sched {
     enum base_policy {
         always,
         never
-    };
-
-    struct automatic {
-        static const base_policy when = always;
-        static const unsigned level = 0;
     };
 
     template <unsigned Level = 0>
@@ -28,6 +25,8 @@ namespace map_sched {
         static const base_policy when = never;
         static const unsigned level = 0;
     };
+
+    using automatic = parallel<0>;
 };
 
 template <unsigned Level, typename Func, typename Range, typename Policy>
@@ -106,6 +105,8 @@ static
 void map(Func f, const Range &r)
 {
     map(f, r, map_sched::automatic());
+}
+
 }
 
 #endif

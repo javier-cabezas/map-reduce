@@ -3,6 +3,8 @@
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
 
+#include <cstring>
+
 #include <type_traits>
 #include <utility>
 
@@ -164,19 +166,18 @@ private:
 template <typename T>
 struct array_detail
 {
-    static T *alloc(size_t elems)
+    static constexpr size_t elems()
     {
-        return new T[elems];
+        return 1;
     }
 };
 
 template <typename T, size_t Size>
 struct array_detail<T[Size]>
 {
-    static T *
-    alloc(size_t elems = 1)
+    static constexpr size_t elems()
     {
-        return (T *) array_detail<T>::alloc(Size * elems);
+        return Size * array_detail<T>::elems();
     }
 };
 
@@ -222,22 +223,55 @@ template <typename T, size_t Size>
 class array<T[Size]>
 {
     friend ref<T[Size]> &make_array<T[Size]>();
+public:
+    typedef typename std::remove_all_extents<T[Size]>::type base_type;
+    
+    const static size_t dims  = std::rank<T[Size]>::value;
+    const static size_t elems = array_detail<T[Size]>::elems();
 
+private:
     T(*data_)[Size];
 
     static T
     (*make())[Size]
     {
-        return (T(*)[Size]) array_detail<T[Size]>::alloc();
+        return (T(*)[Size]) new base_type[elems];
     }
 
 public:
-    array()
+    array() :
+        data_(array::make())
     {
-        data_ = array::make();
     }
 
-    //typename std::result_of<make_range<T[Size]> >::type range;
+    array(const array &a) :
+        data_(array::make())
+    {
+        ::memcpy(data_, a.data_, array_detail<T[Size]>::elems() * sizeof(array::base_type));
+    }
+
+    array(array &&a) :
+        data_(a.data_)
+    {
+        a.data_ = nullptr;
+    }
+
+    ~array()
+    {
+        if (data_) {
+            delete [] data_;
+        }
+    }
+
+    array &operator=(array &&a)
+    {
+        if (this != &a) {
+            data_ = a.data_;
+            a.data_ = nullptr;
+        }
+
+        return *this;
+    }
 
     T &operator[](int i)
     {

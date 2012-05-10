@@ -7,6 +7,30 @@
 #include "common"
 #include "range"
 
+namespace map_reduce {
+
+namespace reduce_sched {
+    enum base_policy {
+        always,
+        never
+    };
+
+    template <unsigned Level = 0>
+    struct parallel {
+        static const base_policy when = always;
+        static const unsigned level = Level;
+    };
+
+    struct serial {
+        static const base_policy when = never;
+        static const unsigned level = 0;
+    };
+
+    using automatic = parallel<0>;
+    //using automatic = serial;
+};
+
+
 template <typename T>
 struct reduce_ops {
     static T add(T a, T b)
@@ -50,70 +74,178 @@ struct invoker<0, Access, Range> {
     }
 };
 
-template <unsigned Level, typename Ret, typename Access, typename Func, typename Range>
+template <unsigned Level, typename Ret, typename Access, typename Func, typename Range, typename Policy>
 struct wrapper_reduce {
     template<typename... Args>
     static Ret
-    reduce(Access a, Func f, const Range &r, Ret tmp, Args &&... args)
+    reduce(Access a, Func f, const Range &r, const Policy &p, Ret tmp, Args &&... args)
     {
         typedef iterator<typename Range::type> myit;
         typedef dim_type<typename Range::type> mydim;
 
         mydim d = r.get_dim(sizeof...(Args));
 
-        for (typename Range::type t  = d.begin;
-                                  t  < d.end;
-                                  t += d.step) {
-            tmp = wrapper_reduce<Level - 1, Ret, Access, Func, Range>::reduce(a, f, r, tmp, args..., t);
+        size_t steps = (d.end - d.begin) / d.step;
+
+        Ret ret;
+
+        if (p.when == reduce_sched::base_policy::always &&
+            p.level == sizeof...(Args) &&
+            (steps > 1)) {
+            size_t chunks;
+            if (steps >= omp_get_num_procs()) {
+                chunks = omp_get_num_procs();
+            } else {
+                chunks = 1;
+            }
+            size_t local_steps = steps / chunks;
+
+            bool first = true;
+
+            #pragma omp parallel for shared(ret, first)
+            for (size_t i = 0; i < chunks; ++i) {
+                Ret partial;
+                if (Range::NDims == (sizeof...(Args) + 1)) {
+                    partial = invoker<Level - 1, Access, Range>::invoke(a, r, args..., d.begin + i * local_steps);
+                }
+                typename Range::type local_begin = d.begin + i * local_steps + (Range::NDims == (sizeof...(Args) + 1)? d.step: 0);
+                for (typename Range::type t  = local_begin;
+                                          t  < ((i == chunks - 1)? d.end: (d.begin + (i + 1) * local_steps));
+                                          t += d.step) {
+                    if (Range::NDims == (sizeof...(Args) + 1) ||
+                        t == local_begin) {
+                        partial = wrapper_reduce<Level - 1, Ret, Access, Func, Range, Policy>::reduce(a, f, r, p, partial, args..., t);
+                    } else {
+                        partial = f(partial, wrapper_reduce<Level - 1, Ret, Access, Func, Range, Policy>::reduce(a, f, r, p, partial, args..., t));
+                    }
+                }
+                #pragma omp critical
+                if (first) {
+                    ret = partial;
+                    first = false;
+                } else {
+                    ret = f(partial, ret);
+                }
+            }
+        } else {
+            Ret partial, initial;
+            if (Range::NDims == (sizeof...(Args) + 1)) {
+                // Take the first element as the first partial value
+                partial = invoker<Level - 1, Access, Range>::invoke(a, r, args..., d.begin);
+                initial = partial;
+            }
+            typename Range::type begin = d.begin + (Range::NDims == (sizeof...(Args) + 1)? d.step: 0); // skip the first element if necessary
+            for (typename Range::type t  = begin;
+                                      t  < d.end;
+                                      t += d.step) {
+                if (Range::NDims == (sizeof...(Args) + 1) ||
+                    t == begin) {
+                    partial = wrapper_reduce<Level - 1, Ret, Access, Func, Range, Policy>::reduce(a, f, r, p, partial, args..., t);
+                } else {
+                    partial = f(partial, wrapper_reduce<Level - 1, Ret, Access, Func, Range, Policy>::reduce(a, f, r, p, partial, args..., t));
+                }
+            }
+            ret = partial;
         }
 
-        return tmp;
+        return ret;
     }
 
     static Ret
-    reduce(Access a, Func f, const Range &r)
+    reduce(Access a, Func f, const Range &r, const Policy &p)
     {
         typedef iterator<typename Range::type> myit;
         typedef dim_type<typename Range::type> mydim;
 
         mydim d = r.get_dim(0);
 
-        Ret ret = invoker<Level - 1, Access, Range>::invoke(a, r, d.begin);
         size_t steps = (d.end - d.begin) / d.step;
 
-        size_t chunks;
-        if (steps >= omp_get_num_procs()) {
-            chunks = omp_get_num_procs();
-        } else {
-            chunks = 1;
-        }
-        size_t local_steps = steps / chunks;
+        Ret ret;
 
-        #pragma omp parallel for shared(ret)
-        for (size_t i = 0; i < chunks; ++i) {
-            Ret partial = invoker<Level - 1, Access, Range>::invoke(a, r, d.begin + i * local_steps);
-            for (typename Range::type t  = d.begin + i * local_steps;
-                                      t  < d.begin + (i + 1) * local_steps;
-                                      t += d.step) {
-                partial = wrapper_reduce<Level - 1, Ret, Access, Func, Range>::reduce(a, f, r, partial, t);
+        if ((p.when == reduce_sched::base_policy::always) &&
+            (p.level == 0) &&
+            (steps > 1)) {
+            size_t chunks;
+            if (steps >= omp_get_num_procs()) {
+                chunks = omp_get_num_procs();
+            } else {
+                chunks = steps;
             }
-            #pragma omp critical
-            ret = f(partial, ret);
+            size_t local_steps = steps / chunks;
+
+            bool first = true;
+
+            #pragma omp parallel for shared(ret, first)
+            for (size_t i = 0; i < chunks; ++i) {
+                Ret partial;
+                if (Range::NDims == 1) {
+                    partial = invoker<Level - 1, Access, Range>::invoke(a, r, d.begin + i * local_steps);
+                }
+                typename Range::type local_begin = d.begin + i * local_steps + (Range::NDims == 1? d.step: 0);
+                for (typename Range::type t  = local_begin;
+                                          t  < ((i == chunks - 1)? d.end: (d.begin + (i + 1) * local_steps));
+                                          t += d.step) {
+                    if (Range::NDims == 1 ||
+                        t == local_begin) {
+                        partial = wrapper_reduce<Level - 1, Ret, Access, Func, Range, Policy>::reduce(a, f, r, p, partial, t);
+                    } else {
+                        partial = f(partial, wrapper_reduce<Level - 1, Ret, Access, Func, Range, Policy>::reduce(a, f, r, p, partial, t));
+                    }
+                }
+                #pragma omp critical
+                {
+                    if (first) {
+                        ret = partial;
+                        first = false;
+                    } else {
+                        ret = f(partial, ret);
+                    }
+                }
+            }
+        } else {
+            Ret partial;
+            if (Range::NDims == 1) {
+                // Take the first element as the first partial value
+                partial = invoker<Level - 1, Access, Range>::invoke(a, r, d.begin);
+            }
+            typename Range::type begin = d.begin + (Range::NDims == 1? d.step: 0); // skip the first element if necessary
+            for (typename Range::type t  = begin;
+                                      t  < d.end;
+                                      t += d.step) {
+                if (Range::NDims == 1 ||
+                    t == begin) {
+                    partial = wrapper_reduce<Level - 1, Ret, Access, Func, Range, Policy>::reduce(a, f, r, p, partial, t);
+                } else {
+                    partial = f(partial, wrapper_reduce<Level - 1, Ret, Access, Func, Range, Policy>::reduce(a, f, r, p, partial, t));
+                }
+            }
+            ret = partial;
         }
 
         return ret;
     }
 };
 
-template <typename Ret, typename Access, typename Func, typename Range>
-struct wrapper_reduce<0, Ret, Access, Func, Range> {
+template <typename Ret, typename Access, typename Func, typename Range, typename Policy>
+struct wrapper_reduce<0, Ret, Access, Func, Range, Policy> {
     template<typename... Args>
     static Ret
-    reduce(Access a, Func f, const Range &r, Ret tmp, Args &&... args)
+    reduce(Access a, Func f, const Range &/*r*/, const Policy &/*p*/, Ret tmp, Args &&... args)
     {
         return f(a(args...), tmp);
     }
 };
+
+template <typename Access, typename Func, typename Range, typename Policy>
+static typename reduce_traits<Func>::return_type
+reduce(Access a,
+       Func f,
+       const Range &r,
+       const Policy &p)
+{
+    return wrapper_reduce<Range::NDims, typename reduce_traits<Func>::return_type, Access, Func, Range, Policy>::reduce(a, f, r, p);
+}
 
 template <typename Access, typename Func, typename Range>
 static typename reduce_traits<Func>::return_type
@@ -121,22 +253,33 @@ reduce(Access a,
        Func f,
        const Range &r)
 {
-    return wrapper_reduce<Range::NDims, typename reduce_traits<Func>::return_type, Access, Func, Range>::reduce(a, f, r);
+    return reduce(a, f, r, reduce_sched::automatic());
 }
 
 #define REDUCTION(name,op)                                                                     \
+template <typename Access, typename Range, typename Policy>                                    \
+typename reduce_traits<Access>::return_type                                                    \
+reduce_##name (Access a,                                                                       \
+               const Range &r,                                                                 \
+               const Policy &p)                                                                \
+{                                                                                              \
+    return reduce(a, reduce_ops<typename reduce_traits<Access>::return_type>::op, r, p);       \
+}                                                                                              \
+                                                                                               \
 template <typename Access, typename Range>                                                     \
 typename reduce_traits<Access>::return_type                                                    \
 reduce_##name (Access a,                                                                       \
                const Range &r)                                                                 \
 {                                                                                              \
-    return reduce(a, reduce_ops<typename reduce_traits<Access>::return_type>::op, r);          \
+    return reduce(a, reduce_ops<typename reduce_traits<Access>::return_type>::op, r, reduce_sched::automatic());          \
 }
 
 REDUCTION(min,  less_than)
 REDUCTION(max,  greater_than)
 REDUCTION(sum,  add)
 REDUCTION(prod, mul)
+
+}
 
 #endif
 
