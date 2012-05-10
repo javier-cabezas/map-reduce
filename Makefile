@@ -1,16 +1,17 @@
-CXXFLAGS=-std=c++11 -g -O3 -Iinclude -fopenmp
+CXXFLAGS=-std=c++11 -O3 -Iinclude -fopenmp
+LDFLAGS=-fopenmp
 NVCC=nvcc
 BINARIES=test
 all: $(BINARIES)
 
 test: test.o
-	$(CXX) $^ -o $@ -g -fopenmp
+	$(CXX) $^ -o $@ $(LDFLAGS)
 
 main_cuda: main_cuda.o
-	g++ $^ -o $@ -g -fopenmp -lcudart
+	g++ $^ -o $@ -fopenmp -lcudart
 
 %.o: %.cu
-	$(NVCC) -c $^ -o $@ -g -arch sm_20 -Xcompiler -fopenmp -I.
+	$(NVCC) -c $^ -o $@ -arch sm_20 -Xcompiler -fopenmp -I.
 
 clean:
 	rm -f *.o $(BINARIES)

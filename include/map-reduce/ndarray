@@ -263,6 +263,25 @@ public:
         }
     }
 
+    bool operator==(const array &a) const
+    {
+        if (this != &a) {
+            base_type *linear_current = (base_type *) data_;
+            base_type *linear_other   = (base_type *) a.data_;
+
+            for (long i = 0; i < elems; ++i) {
+                if (linear_current[i] != 
+                    linear_other[i]) {
+                    return false;
+                }
+            }
+
+            return true;
+        } else {
+            return true;
+        }
+    }
+
     array &operator=(array &&a)
     {
         if (this != &a) {

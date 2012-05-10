@@ -32,7 +32,8 @@
 
 using namespace map_reduce;
 
-int func(int x, int y)
+template <typename T>
+int func_greater(T x, T y)
 {
     if (x > y) return x;
     return y;
@@ -65,7 +66,7 @@ int test_reduction_sum()
                  {
                      return a[i];
                  },
-                 reduce_ops<int>::add,
+                 reduce_ops<long>::add,
                  make_range(N));
 
     assert(sum == (N + 1) * N / 2);
@@ -125,27 +126,27 @@ template <size_t N>
 int test_reduction_max()
 {
 #define NUM 696969696
-    array<int[N]> a;
+    array<long[N]> a;
 
     map([&](int i)
         {
             if (i == N/2) {
-                a[i] = int(NUM);
+                a[i] = NUM;
             } else {
                 a[i] = i + 1;
             }
         },
         make_range(N));
 
-    int max = reduce([&](int i)
-                     {
-                         return a[i];
-                     },
-                     [&](int a, int b)
-                     {
-                         return a > b? a: b;
-                     },
-                     make_range(N));
+    long max = reduce([&](int i)
+                      {
+                          return a[i];
+                      },
+                      [&](long a, long b)
+                      {
+                          return a > b? a: b;
+                      },
+                      make_range(N));
 
     assert(max == NUM);
 
@@ -153,7 +154,7 @@ int test_reduction_max()
                  {
                      return a[i];
                  },
-                 reduce_ops<int>::greater_than,
+                 reduce_ops<long>::greater_than,
                  make_range(N));
 
     assert(max == NUM);
@@ -163,6 +164,54 @@ int test_reduction_max()
                          return a[i];
                      },
                      make_range(N));
+
+    assert(max == NUM);
+
+    return 0;
+}
+
+template <size_t N, size_t M>
+int test_reduction_max_2d()
+{
+#define NUM 696969696
+    array<long[N][M]> a;
+
+    map([&](int i, int j)
+        {
+            if (i == N/2 && j == M/2) {
+                a[i][j] = NUM;
+            } else {
+                a[i][j] = N * i + j +1;
+            }
+        },
+        make_range(N, M));
+
+    long max = reduce([&](int i, int j)
+                     {
+                         return a[i][j];
+                     },
+                     [](long a, long b)
+                     {
+                         return a > b? a: b;
+                     },
+                     make_range(N, M));
+
+    assert(max == NUM);
+
+    max = reduce([&](int i, int j)
+                 {
+                     return a[i][j];
+                 },
+                 reduce_ops<long>::greater_than,
+                 make_range(N, M));
+
+    assert(max == NUM);
+
+    max = reduce_max([&](int i, int j)
+                     {
+                         return a[i][j];
+                     },
+                     make_range(N, M));
 
     assert(max == NUM);
 
@@ -192,66 +241,73 @@ int test_reduction()
     test_reduction_max<100>();
     test_reduction_max<1000>();
     test_reduction_max<10000>();
+    
+    test_reduction_max_2d<1,1>();
+    test_reduction_max_2d<1,100>();
+    test_reduction_max_2d<1,10000>();
+    test_reduction_max_2d<100,1>();
+    test_reduction_max_2d<100,100>();
+    test_reduction_max_2d<100,10000>();
+    test_reduction_max_2d<10000,1>();
+    test_reduction_max_2d<10000,100>();
+    test_reduction_max_2d<10000,10000>();
 }
 
-int main(int argc, char *argv[])
+template <typename T, size_t N, size_t M>
+void print(const array<T[N][M]> &a)
 {
-    test_reduction();
+    for (unsigned i = 0; i < N; ++i) {
+        for (unsigned j = 0; j < M; ++j) {
+            printf("%lu ", a[i][j]);
+        }
+        printf("\n");
+    }
+}
 
-    static const unsigned N = 1000;
-    static const unsigned M = 1000;
-
-    array<int[N][M]> a;
-    array<int[N][M]> b;
-
-    array<int[N][M]> c;
-
-    map([&](int i, int j)
-        {
-            if (i == N/2 && j == M/2) {
-                c[i][j] = 6969;
-            } else {
-                c[i][j] = i;
-            }
-
-            a[i][j] = i;
-            b[i][j] = j;
-        },
-        range<2>(N, M));
-
-    int max = reduce_max([&](int i, int j)
-                         {
-                             return c[i][j];
-                         },
-                         make_range(N, M));
-
-    max = reduce([&](int i, int j)
-                 {
-                     return c[i][j];
-                 },
-                 [&](int val, int tmp)
-                 {
-                     if (val > tmp) return val;
-                     return tmp;
-                 },
-                 make_range(N, M), reduce_sched::serial());
-
-    max = reduce([&](int i, int j)
-                 {
-                     return c[i][j];
-                 },
-                 reduce_ops<int>::greater_than,
-                 make_range(N, M), reduce_sched::serial());
-
-    map([&](int i, int j)
-        {
-            int tmp = 0;
+template <typename T, size_t N, size_t M>
+void test_matrixmul_gold(array<T[N][M]> &c, 
+                         const array<T[N][M]> &a, 
+                         const array<T[N][M]> &b)
+{
+    for (unsigned i = 0; i < N; ++i) {
+        for (unsigned j = 0; j < M; ++j) {
+            T tmp = 0;
             for (unsigned k = 0; k < N; ++k) {
-                tmp = a[i][k] * b[k][j];
+                tmp += a[i][k] * b[k][j];
+            }
+            c[i][j] = tmp;
+        }
+    }
+}
+
+template <size_t N, size_t M>
+int test_matrixmul_instance()
+{
+    array<long[N][M]> a;
+    array<long[N][M]> b;
+
+    array<long[N][M]> c, c_gold;
+
+    map([&](int i, int j)
+        {
+            a[i][j] = N * i + j +1;
+            b[i][j] = N * i + j +1;
+        },
+        make_range(N, M));
+
+    test_matrixmul_gold(c_gold, a, b);
+
+    map([&](int i, int j)
+        {
+            long tmp = 0;
+            for (unsigned k = 0; k < N; ++k) {
+                tmp += a[i][k] * b[k][j];
             }
             c[i][j] = tmp;
         },
         make_range(N, M));
+
+    assert(c == c_gold);
 
     map([&](int i, int j)
         {
@@ -259,11 +315,30 @@ int main(int argc, char *argv[])
                              {
                                  return a[i][k] * b[k][j];
                              },
-                             reduce_ops<int>::add,
-                             make_range(N),
-                             reduce_sched::serial());
+                             reduce_ops<long>::add,
+                             make_range(N));
         },
         make_range(N, M));
+
+    assert(c == c_gold);
+
+    return 0;
+}
+
+int test_matrixmul()
+{
+    test_matrixmul_instance<1, 1>();
+    test_matrixmul_instance<10, 10>();
+    test_matrixmul_instance<100, 100>();
+    test_matrixmul_instance<1000, 1000>();
+
+    return 0;
+}
+
+int main(int argc, char *argv[])
+{
+    test_reduction();
+    test_matrixmul();
 
     return 0;
 }
