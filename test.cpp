@@ -19,10 +19,12 @@
  * }}}
  */
 
+#include <chrono>
 #include <iostream>
 
 #include <map-reduce/map>
-#include <map-reduce/ndarray>
+#include <map-reduce/array>
+#include <map-reduce/dynarray>
 #include <map-reduce/reduce>
 
 #define C1 2.3f
@@ -220,37 +222,52 @@ int test_reduction_max_2d()
 
 int test_reduction()
 {
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+    start = std::chrono::system_clock::now();
+
     test_reduction_sum<1>();
-    test_reduction_sum<10>();
     test_reduction_sum<100>();
-    test_reduction_sum<1000>();
     test_reduction_sum<10000>();
 
+    end = std::chrono::system_clock::now();
+
+    std::cout << "Reduction Sum: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+
+    start = std::chrono::system_clock::now();
+
     test_reduction_sum_2d<1,1>();
-    test_reduction_sum_2d<1,100>();
     test_reduction_sum_2d<1,10000>();
     test_reduction_sum_2d<100,1>();
-    test_reduction_sum_2d<100,100>();
     test_reduction_sum_2d<100,10000>();
     test_reduction_sum_2d<10000,1>();
-    test_reduction_sum_2d<10000,100>();
     test_reduction_sum_2d<10000,10000>();
 
+    end = std::chrono::system_clock::now();
+
+    std::cout << "Reduction Sum 2D: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+
+    start = std::chrono::system_clock::now();
+
     test_reduction_max<1>();
-    test_reduction_max<10>();
     test_reduction_max<100>();
-    test_reduction_max<1000>();
     test_reduction_max<10000>();
+
+    end = std::chrono::system_clock::now();
+
+    std::cout << "Reduction Max: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
     
+    start = std::chrono::system_clock::now();
+
     test_reduction_max_2d<1,1>();
-    test_reduction_max_2d<1,100>();
     test_reduction_max_2d<1,10000>();
     test_reduction_max_2d<100,1>();
-    test_reduction_max_2d<100,100>();
     test_reduction_max_2d<100,10000>();
     test_reduction_max_2d<10000,1>();
-    test_reduction_max_2d<10000,100>();
     test_reduction_max_2d<10000,10000>();
+
+    end = std::chrono::system_clock::now();
+
+    std::cout << "Reduction Max 2D: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
 }
 
 template <typename T, size_t N, size_t M>
@@ -258,9 +275,9 @@ void print(const array<T[N][M]> &a)
 {
     for (unsigned i = 0; i < N; ++i) {
         for (unsigned j = 0; j < M; ++j) {
-            printf("%lu ", a[i][j]);
+            std::cout << a[i][j] << " ";
         }
-        printf("\n");
+        std::cout << std::endl;
     }
 }
 
@@ -327,10 +344,69 @@ int test_matrixmul_instance()
 
 int test_matrixmul()
 {
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+
+    start = std::chrono::system_clock::now();
     test_matrixmul_instance<1, 1>();
+    end = std::chrono::system_clock::now();
+    std::cout << "Matrix multiplication 1: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+
+    start = std::chrono::system_clock::now();
     test_matrixmul_instance<10, 10>();
+    end = std::chrono::system_clock::now();
+    std::cout << "Matrix multiplication 10: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+
+    start = std::chrono::system_clock::now();
     test_matrixmul_instance<100, 100>();
+    end = std::chrono::system_clock::now();
+    std::cout << "Matrix multiplication 100: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+
+    start = std::chrono::system_clock::now();
     test_matrixmul_instance<1000, 1000>();
+    end = std::chrono::system_clock::now();
+    std::cout << "Matrix multiplication 1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+
+    return 0;
+}
+
+int test_array()
+{
+    array<int[10][10]> a;
+    array<int[10][10]> b;
+
+    for (unsigned i = 0; i < a.get_size<0>(); ++i) {
+        for (unsigned j = 0; j < a.get_size<1>(); ++j) {
+            a[i][j] = i * j;
+            b(i, j) = i * j;
+        }
+    }
+
+    for (unsigned i = 0; i < a.get_size<0>(); ++i) {
+        for (unsigned j = 0; j < a.get_size<1>(); ++j) {
+            assert(b[i][j] == a(i, j));
+        }
+    }
+
+    return 0;
+}
+
+int test_dynarray()
+{
+    dynarray<int, 2> a(10, 10);
+    dynarray<int, 2> b(10, 10);
+
+    for (unsigned i = 0; i < a.get_size<0>(); ++i) {
+        for (unsigned j = 0; j < a.get_size<1>(); ++j) {
+            a[i][j] = i * 10 + j;
+            b(i, j) = i * 10 + j;
+        }
+    }
+
+    for (unsigned i = 0; i < a.get_size<0>(); ++i) {
+        for (unsigned j = 0; j < a.get_size<1>(); ++j) {
+            assert(b[i][j] == a(i, j));
+        }
+    }
 
     return 0;
 }
@@ -346,6 +422,8 @@ int test_ref()
 
 int main(int argc, char *argv[])
 {
+    test_array();
+    test_dynarray();
     test_reduction();
     test_matrixmul();
     test_ref();

@@ -1,10 +1,14 @@
+CXX=/usr/lib/gcc-snapshot/bin/g++
+
 ifeq ($(DEBUG),1)
 	CXXFLAGS=-std=c++11 -O0 -g -Iinclude -fopenmp
+    LDFLAGS=-fopenmp -g
 else
 	CXXFLAGS=-std=c++11 -O3 -Iinclude -fopenmp
+    LDFLAGS=-fopenmp
 endif
+
 # -ftree-vectorizer-verbose=2
-LDFLAGS=-fopenmp
 NVCC=nvcc
 BINARIES=test
 all: $(BINARIES)

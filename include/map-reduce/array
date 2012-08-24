@@ -1,14 +1,13 @@
 #ifndef GMAP_NDARRAY_
 #define GMAP_NDARRAY_
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-
 #include <cstring>
 
 #include <memory>
 #include <type_traits>
 #include <utility>
 
+#if 0
 template <typename T>
 class container {
 protected:
@@ -163,22 +162,48 @@ private:
         init_ndarray(index+1, dim_sizes...);
     }
 };
+#endif
 
 template <typename T>
-struct array_detail
+struct array_info
 {
-    static constexpr size_t elems()
+    static const size_t elems = 1;
+};
+
+template <typename T, unsigned Idx, unsigned Curr>
+struct array_dim_info
+{
+    constexpr static
+    size_t get_size()
     {
-        return 1;
+        return 0;
+    }
+};
+
+template <typename T, unsigned Size, unsigned Idx, unsigned Curr>
+struct array_dim_info<T[Size], Idx, Curr>
+{
+    constexpr static
+    size_t get_size()
+    {
+        return Idx == Curr? Size :
+                            array_dim_info<T, Idx, Curr + 1>::get_size();
     }
 };
 
 template <typename T, size_t Size>
-struct array_detail<T[Size]>
+struct array_info<T[Size]>
 {
-    static constexpr size_t elems()
+    using base_type = typename std::remove_all_extents<T[Size]>::type;
+
+    static const size_t elems = Size * array_info<T>::elems;
+    const static size_t dims  = std::rank<T[Size]>::value;
+
+    template <unsigned Idx>
+    constexpr static
+    size_t get_size()
     {
-        return Size * array_detail<T>::elems();
+        return array_dim_info<T[Size], Idx, 0>::get_size();
     }
 };
 
@@ -209,19 +234,19 @@ struct array_get<T[Size]>
 template <typename T>
 struct array
 {
+    static_assert(std::is_array<T>::value, "Type must be an array");
 };
 
 template <typename T>
 using ref = T&;
 
 template <typename T>
-ref<T> &
-make_array();
-
-#include "range"
+class array_ref
+{
+};
 
 template <typename T>
-class array_ref
+class const_array_ref
 {
 };
 
@@ -229,24 +254,14 @@ template <typename T, size_t Size>
 class array<T[Size]>;
 
 template <typename T, size_t Size>
-class array_ref<T[Size]>
+class array_ref<T[Size]> :
+    public array_info<T[Size]>
 {
-public:
-    typedef typename std::remove_all_extents<T[Size]>::type base_type;
-    
-    const static size_t dims  = std::rank<T[Size]>::value;
-    const static size_t elems = array_detail<T[Size]>::elems();
-
 private:
     T (*data_)[Size];
 
 public:
-    array_ref(const array<T[Size]> &a);
-
-    array_ref(const array_ref &ref) :
-        data_(ref.data_)
-    {
-    }
+    array_ref(array<T[Size]> &a);
 
     array_ref(T (*ptr)[Size]) :
         data_(ptr)
@@ -265,27 +280,53 @@ public:
 };
 
 template <typename T, size_t Size>
-class array<T[Size]>
+class const_array_ref<T[Size]> :
+    public array_info<T[Size]>
 {
-    friend ref<T[Size]> &make_array<T[Size]>();
-    friend class array_ref<T[Size]>;
+private:
+    const T (*data_)[Size];
 
 public:
-    typedef typename std::remove_all_extents<T[Size]>::type base_type;
-    
-    const static size_t dims  = std::rank<T[Size]>::value;
-    const static size_t elems = array_detail<T[Size]>::elems();
+    const_array_ref(const array<T[Size]> &a);
+
+    const_array_ref(const_array_ref &ref) :
+        data_(ref.data_)
+    {
+    }
+
+    const_array_ref(T (*ptr)[Size]) :
+        data_(ptr)
+    {
+    }
+
+    T &operator[](int i)
+    {
+        return (*data_)[i];
+    }
+
+    const T &operator[](int i) const
+    {
+        return (*data_)[i];
+    }
+};
+
+template <typename T, size_t Size>
+class array<T[Size]> :
+    public array_info<T[Size]>
+{
+    friend class array_ref<T[Size]>;
+
+    using parent_info = array_info<T[Size]>;
 
 private:
     std::unique_ptr<T[Size]> data_;
+    //static constexpr size_t dims_[dims];
 
     static T
     (*make())[Size]
     {
-        return (T(*)[Size]) new base_type[elems];
+        return (T(*)[Size]) new typename parent_info::base_type[parent_info::elems];
     }
-
-    
 
 public:
     array() :
@@ -296,7 +337,7 @@ public:
     array(const array &a) :
         data_(array::make())
     {
-        ::memcpy(data_.get(), a.data_.get(), array_detail<T[Size]>::elems() * sizeof(array::base_type));
+        ::memcpy(data_.get(), a.data_.get(), parent_info::elems * sizeof(array::base_type));
     }
 
     array(array &&a) :
@@ -307,10 +348,10 @@ public:
     template <typename T2>
     array_ref<T2> reshape()
     {
-        static_assert(elems == array_detail<T2>::elems(),
+        static_assert(parent_info::elems == array_info<T2>::elems,
                       "Total numer of elements do not match");
         static_assert(std::is_same<typename std::remove_all_extents<T2>::type,
-                                   base_type>::value,
+                                   typename parent_info::base_type>::value,
                       "Base types do not match");
         return array_ref<T2>((T2 *) data_.get());
     }
@@ -318,17 +359,13 @@ public:
     bool operator==(const array &a) const
     {
         if (this != &a) {
-            base_type *linear_current = (base_type *) data_.get();
-            base_type *linear_other   = (base_type *) a.data_.get();
+            typename parent_info::base_type *
+                current = (typename parent_info::base_type *) data_.get();
+            typename parent_info::base_type *
+                other = (typename parent_info::base_type *) a.data_.get();
 
-            for (long i = 0; i < elems; ++i) {
-                if (linear_current[i] != 
-                    linear_other[i]) {
-                    return false;
-                }
-            }
-
-            return true;
+            return std::equal(current, current + parent_info::elems,
+                              other);
         } else {
             return true;
         }
@@ -348,7 +385,8 @@ public:
     array &operator=(const array &a)
     {
         if (this != &a) {
-            ::memcpy(data_.get(), a.data_.get(), array_detail<T[Size]>::elems() * sizeof(array::base_type));
+            ::memcpy(data_.get(), a.data_.get(),
+                     parent_info::elems * sizeof(array::base_type));
         }
 
         return *this;
@@ -365,39 +403,40 @@ public:
     }
 
     template <typename... Args>
-    typename std::enable_if<sizeof...(Args) == std::rank<T[Size]>::value,
-                            typename std::remove_all_extents<T>::type &>::type
-    operator ()(Args... args)
+    typename parent_info::base_type &
+    operator()(Args... args)
     {
-        //static_assert((sizeof...(Args) + 1) == std::rank<T[Size]>::value, "Wrong number of indexes");
+        static_assert((sizeof...(Args)) == parent_info::dims, "Wrong number of indexes");
         return array_get<T[Size]>::get((*data_), args...);
     }
 
-#if 0
     template <typename... Args>
-    typename std::remove_extent<T>::type &
-    operator ()(int i)
+    const typename parent_info::base_type &
+    operator()(Args... args) const
     {
-        static_assert(1 == std::rank<T[Size]>::value, "Wrong number of indexes");
-        return (*data_)[i];
+        static_assert((sizeof...(Args)) == parent_info::dims, "Wrong number of indexes");
+        return array_get<T[Size]>::get((*data_), args...);
     }
-#endif
+
+    template <unsigned Idx>
+    constexpr static
+    size_t get_size()
+    {
+        return parent_info::get_size<Idx>();
+    }
 };
 
 template <typename T, size_t Size>
-array_ref<T[Size]>::array_ref(const array<T[Size]> &a) :
+array_ref<T[Size]>::array_ref(array<T[Size]> &a) :
     data_(a.data_.get())
 {
 }
 
-template <typename T>
-ref<T> &
-make_array()
+template <typename T, size_t Size>
+const_array_ref<T[Size]>::const_array_ref(const array<T[Size]> &a) :
+    data_(a.data_.get())
 {
-    return *array<T>::make();
-};
-
-#endif
+}
 
 #endif
 

@@ -1,0 +1,209 @@
+#ifndef GMAP_DYNARRAY_
+#define GMAP_DYNARRAY_
+
+#include <cstring>
+
+#include <memory>
+#include <type_traits>
+#include <utility>
+
+template <typename T, size_t Dims>
+class container {
+public:
+    //size_t total_size_;
+    explicit container(size_t size) :
+        data_(new T[size])
+    {
+    }
+
+    size_t sizes_[Dims];
+    size_t offs_[Dims - 1];
+
+    std::unique_ptr<T[]> data_;
+
+    T *
+    get_base_ptr()
+    {
+        return data_.get();
+    }
+};
+
+template <typename T, unsigned Sub, size_t Dims>
+class dynarray_info {
+    friend class dynarray_info<T, Sub - 1, Dims>;
+
+private:
+    size_t *subsizes_;
+    size_t *suboffs_;
+
+    //dynarray_info(dynarray_info &parent) = delete;
+
+protected:
+    explicit dynarray_info(container<T, Dims> &parent) :
+        subsizes_(parent.sizes_),
+        suboffs_(parent.offs_)
+    {
+    }
+
+    explicit dynarray_info(dynarray_info<T, Sub + 1, Dims> &parent) :
+        subsizes_(parent.subsizes_ + 1),
+        suboffs_(parent.suboffs_ + 1)
+    {
+    }
+
+public:
+    template <unsigned Dim>
+    size_t get_size() const
+    {
+        return subsizes_[Dim];
+    }
+
+    template <unsigned Dim>
+    size_t get_offset() const
+    {
+        return suboffs_[Dim];
+    }
+};
+
+template <typename T, unsigned Sub, size_t Dims>
+class subarray :
+    public dynarray_info<T, Sub, Dims> {
+    T *data_;
+
+    using parent_info = dynarray_info<T, Sub, Dims>;
+
+    friend class subarray<T, Sub - 1, Dims>;
+
+protected:
+    subarray(container<T, Dims> &parent) :
+        dynarray_info<T, Sub, Dims>(parent),
+        data_(parent.get_base_ptr())
+    {
+    }
+
+    subarray(subarray<T, Sub + 1, Dims> &parent, T *data) :
+        dynarray_info<T, Sub, Dims>(parent),
+        data_(data)
+    {
+    }
+
+    template <unsigned Dim>
+    size_t get_total_offset(size_t idx)
+    {
+        // For the last level we just return the given index
+        return idx;
+    }
+
+    template <unsigned Dim, typename... Idx>
+    size_t get_total_offset(size_t idx, Idx... idxs)
+    {
+        return idx * parent_info::template get_offset<Dim>() +
+               get_total_offset<Dim + 1>(idxs...);
+    }
+
+public:
+    static const size_t dims = Dims;
+    
+    subarray<T, Sub - 1, Dims> operator[](unsigned idx)
+    {
+        size_t off = parent_info::template get_offset<0>();
+        return subarray<T, Sub - 1, Dims>(*this, &data_[idx * off]);
+    }
+
+    template <typename... Idx>
+    T &operator()(Idx... idxs)
+    {
+        static_assert(Dims == sizeof...(idxs), "Number of dimensions do not match");
+
+        return data_[get_total_offset<0>(idxs...)];
+    }
+
+    template <typename... Idx>
+    const T &operator()(Idx... idxs) const
+    {
+        static_assert(Dims == sizeof...(idxs), "Number of dimensions do not match");
+
+        return data_[get_total_offset<0>(idxs...)];
+    }
+};
+
+template <typename T, size_t Dims>
+class subarray<T, 1, Dims> :
+    public dynarray_info<T, 1, Dims> {
+    T *data_;
+
+    friend class subarray<T, 2, Dims>;
+
+protected:
+    subarray(subarray<T, 2, Dims> &parent, T *data) :
+        dynarray_info<T, 1, Dims>(parent),
+        data_(data)
+    {
+    }
+
+public:
+    T &operator[](unsigned idx)
+    {
+        return data_[idx];
+    }
+
+    const T &operator[](unsigned idx) const
+    {
+        return data_[idx];
+    }
+
+    T &operator()(unsigned idx)
+    {
+        return data_[idx];
+    }
+
+    const T &operator()(unsigned idx) const
+    {
+        return data_[idx];
+    }
+};
+
+template <typename T, size_t Dims>
+class dynarray : 
+    public container<T, Dims>,
+    public subarray<T, Dims, Dims> {
+
+    using parent_container = container<T, Dims>;
+    using parent_subarray = subarray<T, Dims, Dims>;
+
+public:
+    template <typename... DimSizes>
+    dynarray(DimSizes ...sizes) :
+        parent_container(init_dynarray(0, sizes...)),
+        parent_subarray((parent_container &) *this)
+    {
+        static_assert(Dims > 0, "Number of dimensions must be greater than 0");
+        static_assert(Dims == sizeof...(sizes), "Number of dimensions do not match");
+    }
+
+private:
+    size_t init_dynarray(unsigned index, size_t dim_size)
+    {
+        parent_container::sizes_[index] = dim_size;
+
+        long unsigned next_off = 1;
+        for (unsigned i = Dims - 1; i > 0; --i) {
+            next_off *= parent_container::sizes_[i];
+            parent_container::offs_[i - 1] = next_off;
+        }
+
+        return dim_size;
+    }
+
+    template <typename... DimSizes>
+    size_t init_dynarray(unsigned index, size_t dim_size, DimSizes ...sizes)
+    {
+        parent_container::sizes_[index] = dim_size;
+
+        return dim_size * init_dynarray(index + 1, sizes...);
+    }
+};
+
+#endif
+
+/* vim:set ft=cpp backspace=2 tabstop=4 shiftwidth=4 textwidth=120 foldmethod=marker expandtab: */

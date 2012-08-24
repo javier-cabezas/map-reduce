@@ -11,8 +11,8 @@ namespace map_reduce {
 
 namespace map_sched {
     enum base_policy {
-        always,
-        never
+        always = 5,
+        never  = 7
     };
 
     template <unsigned Level = 0>
