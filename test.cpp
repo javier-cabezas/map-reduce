@@ -287,31 +287,13 @@ void print(const array<T[N][M]> &a)
     }
 }
 
-template <typename T, size_t N, size_t M>
-void test_matrixmul_gold(array<T[N][M]> &c, 
-                         const array<T[N][M]> &a, 
-                         const array<T[N][M]> &b)
+template <typename T>
+void test_matrixmul_gold(T &c, const T &a, const T &b, size_t N, size_t M)
 {
     for (unsigned i = 0; i < N; ++i) {
         for (unsigned j = 0; j < M; ++j) {
             T tmp = 0;
             for (unsigned k = 0; k < N; ++k) {
-                tmp += a[i][k] * b[k][j];
-            }
-            c[i][j] = tmp;
-        }
-    }
-}
-
-template <typename T>
-void test_matrixmul_dyn_gold(dynarray<T, 2> &c, 
-                             const dynarray<T, 2> &a, 
-                             const dynarray<T, 2> &b)
-{
-    for (unsigned i = 0; i < a.get_size(0); ++i) {
-        for (unsigned j = 0; j < a.get_size(1); ++j) {
-            T tmp = 0;
-            for (unsigned k = 0; k < a.get_size(0); ++k) {
                 tmp += a[i][k] * b[k][j];
             }
             c[i][j] = tmp;
@@ -326,8 +308,10 @@ enum class matrixmul_impl {
 };
 
 template <matrixmul_impl Impl, typename T, size_t N, size_t M>
-int test_matrixmul_static_instance(T &c, T &a, T &b)
+size_t test_matrixmul_static_instance(T &c, T &a, T &b)
 {
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+
     map([&](int i, int j)
         {
             a[i][j] = N * i + j + 1;
@@ -335,6 +319,8 @@ int test_matrixmul_static_instance(T &c, T &a, T &b)
         },
         make_range(N, M));
 
+    start = std::chrono::system_clock::now();
+
     if (Impl == matrixmul_impl::pure) {
         for (unsigned i = 0; i < N; ++i) {
             for (unsigned j = 0; j < M; ++j) {
@@ -372,12 +358,16 @@ int test_matrixmul_static_instance(T &c, T &a, T &b)
             make_range(N, M));
     }
 
-    return 0;
+    end = std::chrono::system_clock::now();
+
+    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 }
 
 template <matrixmul_impl Impl, typename T>
-int test_matrixmul_dyn_instance(T &c, T &a, T &b, size_t N, size_t M)
-{ 
+size_t test_matrixmul_dyn_instance(T &c, T &a, T &b, size_t N, size_t M)
+{
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+
     if (Impl == matrixmul_impl::pure) {
         for (unsigned i = 0; i < N; ++i) {
             for (unsigned j = 0; j < M; ++j) {
@@ -389,6 +379,8 @@ int test_matrixmul_dyn_instance(T &c, T &a, T &b, size_t N, size_t M)
             }
         }
     }
+
+    start = std::chrono::system_clock::now();
 
     if (Impl == matrixmul_impl::map) {
         map([&](int i, int j)
@@ -415,7 +407,9 @@ int test_matrixmul_dyn_instance(T &c, T &a, T &b, size_t N, size_t M)
             make_range(N, M));
     }
 
-    return 0;
+    end = std::chrono::system_clock::now();
+
+    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 }
 
 enum class stencil_impl {
@@ -425,8 +419,10 @@ enum class stencil_impl {
 };
 
 template <stencil_impl Impl, typename T, size_t N, size_t M, bool Test = false>
-int test_stencil_static_instance(T &a, T &b, T &c)
+size_t test_stencil_static_instance(T &a, T &b, T &c)
 {
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+
     const int order = 8;
 
     map([&](int i, int j)
@@ -438,6 +434,8 @@ int test_stencil_static_instance(T &a, T &b, T &c)
             }
         },
         make_range(N, M));
+
+    start = std::chrono::system_clock::now();
 
     if (Impl == stencil_impl::pure) {
         for (unsigned i = order; i < N - order; ++i) {
@@ -484,12 +482,16 @@ int test_stencil_static_instance(T &a, T &b, T &c)
                        dim_type<int>({ order, int(M) - order})));
     }
 
-    return 0;
+    end = std::chrono::system_clock::now();
+
+    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 }
 
 template <stencil_impl Impl, typename T, bool Test = false>
-int test_stencil_dyn_instance(T &a, T &b, T &c, size_t N, size_t M)
+size_t test_stencil_dyn_instance(T &a, T &b, T &c, size_t N, size_t M)
 {
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+
     const int order = 8;
 
     map([&](int i, int j)
@@ -501,6 +503,8 @@ int test_stencil_dyn_instance(T &a, T &b, T &c, size_t N, size_t M)
             }
         },
         make_range(N, M));
+
+    start = std::chrono::system_clock::now();
 
     if (Impl == stencil_impl::pure || Test) {
         for (unsigned i = order; i < N - order; ++i) {
@@ -555,7 +559,9 @@ int test_stencil_dyn_instance(T &a, T &b, T &c, size_t N, size_t M)
         assert(b == c);
     }
 
-    return 0;
+    end = std::chrono::system_clock::now();
+
+    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 }
 
 enum class transpose_impl {
@@ -564,8 +570,10 @@ enum class transpose_impl {
 };
 
 template <transpose_impl Impl, typename T, size_t N, size_t M, bool Test = false>
-int test_transpose_static_instance(T &a, T &b)
+size_t test_transpose_static_instance(T &a, T &b)
 {
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+
     map([&](int i, int j)
         {
             a[i][j] = N * i + j + 1;
@@ -574,6 +582,8 @@ int test_transpose_static_instance(T &a, T &b)
             }
         },
         make_range(N, M));
+
+    start = std::chrono::system_clock::now();
 
     if (Impl == transpose_impl::pure) {
         for (unsigned i = 0; i < N; ++i) {
@@ -591,12 +601,16 @@ int test_transpose_static_instance(T &a, T &b)
             make_range(N, M));
     }
 
-    return 0;
+    end = std::chrono::system_clock::now();
+
+    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 }
 
 template <transpose_impl Impl, typename T, bool Test = false>
-int test_transpose_dyn_instance(T &a, T &b, size_t N, size_t M)
+size_t test_transpose_dyn_instance(T &a, T &b, size_t N, size_t M)
 {
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+
     map([&](int i, int j)
         {
             a[i][j] = N * i + j + 1;
@@ -605,6 +619,8 @@ int test_transpose_dyn_instance(T &a, T &b, size_t N, size_t M)
             }
         },
         make_range(N, M));
+
+    start = std::chrono::system_clock::now();
 
     if (Impl == transpose_impl::pure || Test) {
         for (unsigned i = 0; i < N; ++i) {
@@ -626,7 +642,9 @@ int test_transpose_dyn_instance(T &a, T &b, size_t N, size_t M)
         assert(a == b);
     }
 
-    return 0;
+    end = std::chrono::system_clock::now();
+
+    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 }
 
 int test_matrixmul_static()
@@ -644,20 +662,14 @@ int test_matrixmul_static()
     long (&b)[N][M] = *(long (*)[N][M]) new long[N * M];
     long (&c)[N][M] = *(long (*)[N][M]) new long[N * M];
 
-    start = std::chrono::system_clock::now();
-    test_matrixmul_static_instance<matrixmul_impl::pure, long (&)[N][M], N, M>(c, a, b);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    auto usecs = test_matrixmul_static_instance<matrixmul_impl::pure, long (&)[N][M], N, M>(c, a, b);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_matrixmul_static_instance<matrixmul_impl::map, long (&)[N][M], N, M>(c, a, b);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_matrixmul_static_instance<matrixmul_impl::map, long (&)[N][M], N, M>(c, a, b);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_matrixmul_static_instance<matrixmul_impl::map_reduce, long (&)[N][M], N, M>(c, a, b);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_matrixmul_static_instance<matrixmul_impl::map_reduce, long (&)[N][M], N, M>(c, a, b);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
     delete [] &a;
     delete [] &b;
@@ -681,20 +693,14 @@ int test_stencil_static()
     long (&b)[N][M] = *(long (*)[N][M]) new long[N * M];
     long (&c)[N][M] = *(long (*)[N][M]) new long[N * M];
 
-    start = std::chrono::system_clock::now();
-    test_stencil_static_instance<stencil_impl::pure, long (&)[N][M], N, M>(a, b, c);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    auto usecs = test_stencil_static_instance<stencil_impl::pure, long (&)[N][M], N, M>(a, b, c);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_stencil_static_instance<stencil_impl::map, long (&)[N][M], N, M>(a, b, c);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_stencil_static_instance<stencil_impl::map, long (&)[N][M], N, M>(a, b, c);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_stencil_static_instance<stencil_impl::map_reduce, long (&)[N][M], N, M>(a, b, c);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_stencil_static_instance<stencil_impl::map_reduce, long (&)[N][M], N, M>(a, b, c);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
     delete [] &a;
     delete [] &b;
@@ -717,15 +723,11 @@ int test_transpose_static()
     long (&a)[N][M] = *(long (*)[N][M]) new long[N * M];
     long (&b)[N][M] = *(long (*)[N][M]) new long[N * M];
 
-    start = std::chrono::system_clock::now();
-    test_transpose_static_instance<transpose_impl::pure, long (&)[N][M], N, M>(a, b);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    auto usecs = test_transpose_static_instance<transpose_impl::pure, long (&)[N][M], N, M>(a, b);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_transpose_static_instance<transpose_impl::map, long (&)[N][M], N, M>(a, b);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_transpose_static_instance<transpose_impl::map, long (&)[N][M], N, M>(a, b);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
     delete [] &a;
     delete [] &b;
@@ -748,20 +750,14 @@ int test_matrixmul()
     array<long[N][M]> b;
     array<long[N][M]> c;
 
-    start = std::chrono::system_clock::now();
-    test_matrixmul_static_instance<matrixmul_impl::pure, array<long[N][M]>, N, M>(c, a, b);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    auto usecs = test_matrixmul_static_instance<matrixmul_impl::pure, array<long[N][M]>, N, M>(c, a, b);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_matrixmul_static_instance<matrixmul_impl::map, array<long[N][M]>, N, M>(c, a, b);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_matrixmul_static_instance<matrixmul_impl::map, array<long[N][M]>, N, M>(c, a, b);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_matrixmul_static_instance<matrixmul_impl::map_reduce, array<long[N][M]>, N, M>(c, a, b);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_matrixmul_static_instance<matrixmul_impl::map_reduce, array<long[N][M]>, N, M>(c, a, b);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 }
 
 int test_stencil()
@@ -779,20 +775,14 @@ int test_stencil()
     array<long[N][M]> b;
     array<long[N][M]> c;
 
-    start = std::chrono::system_clock::now();
-    test_stencil_static_instance<stencil_impl::pure, array<long[N][M]>, N, M>(a, b, c);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    auto usecs = test_stencil_static_instance<stencil_impl::pure, array<long[N][M]>, N, M>(a, b, c);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_stencil_static_instance<stencil_impl::map, array<long[N][M]>, N, M>(a, b, c);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_stencil_static_instance<stencil_impl::map, array<long[N][M]>, N, M>(a, b, c);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_stencil_static_instance<stencil_impl::map_reduce, array<long[N][M]>, N, M>(a, b, c);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_stencil_static_instance<stencil_impl::map_reduce, array<long[N][M]>, N, M>(a, b, c);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
     return 0;
 }
@@ -811,15 +801,11 @@ int test_transpose()
     array<long[N][M]> a;
     array<long[N][M]> b;
 
-    start = std::chrono::system_clock::now();
-    test_transpose_static_instance<transpose_impl::pure, array<long[N][M]>, N, M>(a, b);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    auto usecs = test_transpose_static_instance<transpose_impl::pure, array<long[N][M]>, N, M>(a, b);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_transpose_static_instance<transpose_impl::map, array<long[N][M]>, N, M>(a, b);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_transpose_static_instance<transpose_impl::map, array<long[N][M]>, N, M>(a, b);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
     return 0;
 }
@@ -841,20 +827,14 @@ int test_matrixmul_dyn()
 
     array_type c(N, M), c_gold(N, M);
 
-    start = std::chrono::system_clock::now();
-    test_matrixmul_dyn_instance<matrixmul_impl::pure, array_type>(c, a, b, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    auto usecs = test_matrixmul_dyn_instance<matrixmul_impl::pure, array_type>(c, a, b, N, M);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_matrixmul_dyn_instance<matrixmul_impl::map, array_type>(c, a, b, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map, array_type>(c, a, b, N, M);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_matrixmul_dyn_instance<matrixmul_impl::map_reduce, array_type>(c, a, b, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map_reduce, array_type>(c, a, b, N, M);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 }
 
 int test_stencil_dyn()
@@ -874,20 +854,14 @@ int test_stencil_dyn()
 
     array_type c(N, M), c_gold(N, M);
 
-    start = std::chrono::system_clock::now();
-    test_stencil_dyn_instance<stencil_impl::pure, array_type>(a, b, c, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    auto usecs = test_stencil_dyn_instance<stencil_impl::pure, array_type>(a, b, c, N, M);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_stencil_dyn_instance<stencil_impl::map, array_type>(a, b, c, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_stencil_dyn_instance<stencil_impl::map, array_type>(a, b, c, N, M);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_stencil_dyn_instance<stencil_impl::map_reduce, array_type>(a, b, c, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_stencil_dyn_instance<stencil_impl::map_reduce, array_type>(a, b, c, N, M);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
     return 0;
 }
@@ -907,15 +881,11 @@ int test_transpose_dyn()
     array_type a(N, M);
     array_type b(N, M);
 
-    start = std::chrono::system_clock::now();
-    test_transpose_dyn_instance<transpose_impl::pure, array_type>(a, b, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    auto usecs = test_transpose_dyn_instance<transpose_impl::pure, array_type>(a, b, N, M);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_transpose_dyn_instance<transpose_impl::map, array_type>(a, b, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_transpose_dyn_instance<transpose_impl::map, array_type>(a, b, N, M);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
     return 0;
 }
@@ -935,23 +905,16 @@ int test_matrixmul_boost()
 
     array_type a(boost::extents[N][M]);
     array_type b(boost::extents[N][M]);
-
     array_type c(boost::extents[N][M]);
 
-    start = std::chrono::system_clock::now();
-    test_matrixmul_dyn_instance<matrixmul_impl::pure, array_type>(c, a, b, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    auto usecs = test_matrixmul_dyn_instance<matrixmul_impl::pure, array_type>(c, a, b, N, M);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_matrixmul_dyn_instance<matrixmul_impl::map, array_type>(c, a, b, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map, array_type>(c, a, b, N, M);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_matrixmul_dyn_instance<matrixmul_impl::map_reduce, array_type>(c, a, b, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map_reduce, array_type>(c, a, b, N, M);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 }
 
 int test_stencil_boost()
@@ -969,31 +932,22 @@ int test_stencil_boost()
 
     array_type a(boost::extents[N][M]);
     array_type b(boost::extents[N][M]);
-
     array_type c(boost::extents[N][M]);
 
-    start = std::chrono::system_clock::now();
-    test_stencil_dyn_instance<stencil_impl::pure, array_type>(a, b, c, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    auto usecs = test_stencil_dyn_instance<stencil_impl::pure, array_type>(a, b, c, N, M);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
-    test_stencil_dyn_instance<stencil_impl::map, array_type>(a, b, c, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    usecs = test_stencil_dyn_instance<stencil_impl::map, array_type>(a, b, c, N, M);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
     test_stencil_dyn_instance<stencil_impl::map_reduce, array_type>(a, b, c, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
     return 0;
 }
 
 int test_transpose_boost()
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-
     std::cout << "========================" << std::endl;
     std::cout << "Matrix transpose (boost)" << std::endl;
     std::cout << "========================" << std::endl;
@@ -1006,15 +960,11 @@ int test_transpose_boost()
     array_type a(boost::extents[N][M]);
     array_type b(boost::extents[N][M]);
 
-    start = std::chrono::system_clock::now();
-    test_transpose_dyn_instance<transpose_impl::pure, array_type>(a, b, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    auto usecs = test_transpose_dyn_instance<transpose_impl::pure, array_type>(a, b, N, M);
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
-    start = std::chrono::system_clock::now();
     test_transpose_dyn_instance<transpose_impl::map, array_type>(a, b, N, M);
-    end = std::chrono::system_clock::now();
-    std::cout << "1000x1000: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 
     return 0;
 }
