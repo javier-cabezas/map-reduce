@@ -28,13 +28,18 @@ struct dim_type
             end   = *l.begin();
             step  = 1;
         } else if (l.size() == 2) {
-            begin = *l.begin();
-            end   = *l.begin();
+            auto it = l.begin();
+            begin = *it;
+            ++it;
+            end   = *it;
             step  = 1;
         } else if (l.size() == 3) {
-            begin = *l.begin();
-            end   = *l.begin();
-            step  = *l.begin();
+            auto it = l.begin();
+            begin = *it;
+            ++it;
+            end   = *it;
+            ++it;
+            step  = *it;
         }
     }
 

@@ -7,163 +7,6 @@
 #include <type_traits>
 #include <utility>
 
-#if 0
-template <typename T>
-class container {
-protected:
-    unsigned long total_size_;
-
-    inline
-    explicit container(T *data) :
-        data_(data)
-    {
-    }
-public:
-    T *data_;
-};
-
-template <typename T, unsigned DIM_SUB, unsigned NDIMS>
-class common_subarray :
-    public container<T> {
-
-    friend class common_subarray<T, DIM_SUB - 1, NDIMS>;
-
-protected:
-    unsigned dim_sizes_[NDIMS];
-    unsigned next_offs_[NDIMS - 1];
-
-    common_subarray(common_subarray<T, DIM_SUB + 1, NDIMS> &parent, T *data) :
-        container<T>(data)
-    {
-        for (unsigned i = NDIMS - DIM_SUB; i < NDIMS; i++) {
-            dim_sizes_[i] = parent.dim_sizes_[i + 1];
-        }
-
-        for (unsigned i = NDIMS - DIM_SUB; i < NDIMS - 1; i++) {
-            next_offs_[i] = parent.next_offs_[i + 1];
-        }
-    }
-
-    inline
-    common_subarray() :
-        container<T>(nullptr)
-    {
-    }
-
-public:
-    inline
-    unsigned dim_size(unsigned dim) const
-    {
-        return dim_sizes_[(NDIMS - DIM_SUB) + dim];
-    }
-
-};
-
-template <typename T, unsigned DIM_SUB, unsigned NDIMS>
-class subarray :
-    public common_subarray<T, DIM_SUB, NDIMS> {
-
-protected:
-    inline
-    subarray(subarray<T, DIM_SUB + 1, NDIMS> &parent, T *data) :
-        common_subarray<T, DIM_SUB, NDIMS>(parent, data)
-    {
-    }
-
-    inline
-    subarray() :
-        common_subarray<T, DIM_SUB, NDIMS>()
-    {
-    }
-
-public:
-    inline
-    subarray<T, DIM_SUB - 1, NDIMS> operator[](unsigned idx)
-    {
-        //printf("Subarray at: %p\n", &container<T>::data_[idx * next_off_]);
-        return subarray<T, DIM_SUB - 1, NDIMS>(*this, &container<T>::data_[idx * (this->next_offs_[NDIMS - DIM_SUB])]);
-    }
-};
-
-template <typename T, unsigned NDIMS>
-class subarray<T, 1, NDIMS> :
-    public common_subarray<T, 1, NDIMS> {
-
-    friend class subarray<T, 2, NDIMS>;
-
-protected:
-    inline
-    subarray(subarray<T, 2, NDIMS> &parent, T *data) :
-        common_subarray<T, 1, NDIMS>(parent, data)
-    {
-    }
-
-    inline
-    subarray() :
-        common_subarray<T, 1, NDIMS>()
-    {
-    }
-
-public:
-    inline
-    T &operator[](unsigned idx)
-    {
-        return container<T>::data_[idx];
-    }
-
-    inline
-    const T &operator[](unsigned idx) const
-    {
-        return container<T>::data_[idx];
-    }
-};
-
-template <typename T, unsigned NDIMS>
-class ndarray : 
-    public subarray<T, NDIMS, NDIMS> {
-public:
-    template <typename... SIZES>
-    ndarray(SIZES... sizes)
-    {
-        static_assert(NDIMS > 0, "Number of dimensions must be greater than 0");
-        static_assert(NDIMS == sizeof...(SIZES), "Number of dimensions do not match");
-
-        container<T>::total_size_ = 1;
-
-        init_ndarray(0, sizes...);
-    }
-
-    inline
-    ~ndarray()
-    {
-        delete [] container<T>::data_;
-    } 
-    
-private:
-    void init_ndarray(unsigned index, unsigned dim_size)
-    {
-        subarray<T, NDIMS, NDIMS>::dim_sizes_[index] = dim_size;
-        container<T>::total_size_ *= dim_size;
-
-        container<T>::data_ = new T[container<T>::total_size_];
-
-        long unsigned next_off = 1;
-        for (unsigned i = NDIMS - 1; i > 0; i--) {
-            next_off *= subarray<T, NDIMS, NDIMS>::dim_sizes_[i];
-            subarray<T, NDIMS, NDIMS>::next_offs_[i - 1] = next_off;
-        }
-    }   
-    template <typename... D>
-    void init_ndarray(unsigned index, unsigned dim_size, D... dim_sizes)
-    {
-        subarray<T, NDIMS, NDIMS>::dim_sizes_[index] = dim_size;
-        container<T>::total_size_ *= dim_size;
-
-        init_ndarray(index+1, dim_sizes...);
-    }
-};
-#endif
-
 template <typename T>
 struct array_info
 {
@@ -194,16 +37,17 @@ struct array_dim_info<T[Size], Idx, Curr>
 template <typename T, size_t Size>
 struct array_info<T[Size]>
 {
-    using base_type = typename std::remove_all_extents<T[Size]>::type;
+    using array_type = T[Size];
+    using base_type = typename std::remove_all_extents<array_type>::type;
 
     static const size_t elems = Size * array_info<T>::elems;
-    const static size_t dims  = std::rank<T[Size]>::value;
+    const static size_t dims  = std::rank<array_type>::value;
 
     template <unsigned Idx>
     constexpr static
     size_t get_size()
     {
-        return array_dim_info<T[Size], Idx, 0>::get_size();
+        return array_dim_info<array_type, Idx, 0>::get_size();
     }
 };
 
@@ -214,10 +58,12 @@ struct array_get
 template <typename T, size_t Size>
 struct array_get<T[Size]>
 {
+    using array_type = T[Size];
+
     template <typename... Args>
     static
     typename std::remove_all_extents<T>::type &
-    get(T (&a)[Size], int i, Args... args)
+    get(array_type &a, int i, Args... args)
     {
         return array_get<T>::get(a[i], args...);
     }
@@ -225,10 +71,27 @@ struct array_get<T[Size]>
     template <typename... Args>
     static
     typename std::remove_all_extents<T>::type &
-    get(T (&a)[Size], int i)
+    get(array_type &a, int i)
     {
         return a[i];
     }
+
+    template <typename... Args>
+    static
+    const typename std::remove_all_extents<T>::type &
+    get(const array_type &a, int i, Args... args)
+    {
+        return array_get<T>::get(a[i], args...);
+    }
+
+    template <typename... Args>
+    static
+    const typename std::remove_all_extents<T>::type &
+    get(const array_type &a, int i)
+    {
+        return a[i];
+    }
+
 };
 
 template <typename T>
@@ -255,89 +118,97 @@ class array<T[Size]>;
 
 template <typename T, size_t Size>
 class array_ref<T[Size]> :
-    public array_info<T[Size]>
-{
+    public array_info<T[Size]> {
+    using array_type = T[Size];
+
 private:
-    T (*data_)[Size];
+    array_type &data_;
 
 public:
-    array_ref(array<T[Size]> &a);
+    array_ref(array<array_type> &a);
 
-    array_ref(T (*ptr)[Size]) :
-        data_(ptr)
+    array_ref(array_type &a) :
+        data_(a)
     {
     }
 
+    inline
     T &operator[](int i)
     {
-        return (*data_)[i];
+        return data_[i];
     }
 
+    inline
     const T &operator[](int i) const
     {
-        return (*data_)[i];
+        return data_[i];
     }
 };
 
 template <typename T, size_t Size>
 class const_array_ref<T[Size]> :
-    public array_info<T[Size]>
-{
+    public array_info<T[Size]> {
+    using array_type = T[Size];
+
 private:
-    const T (*data_)[Size];
+    const array_type &data_;
 
 public:
-    const_array_ref(const array<T[Size]> &a);
+    explicit const_array_ref(const array<array_type> &a);
 
-    const_array_ref(const_array_ref &ref) :
+    explicit const_array_ref(const const_array_ref &ref) :
         data_(ref.data_)
     {
     }
 
-    const_array_ref(T (*ptr)[Size]) :
-        data_(ptr)
+    explicit const_array_ref(const array_type &a) :
+        data_(a)
     {
     }
 
+    inline
     T &operator[](int i)
     {
-        return (*data_)[i];
+        return data_[i];
     }
 
+    inline
     const T &operator[](int i) const
     {
-        return (*data_)[i];
+        return data_[i];
     }
 };
 
 template <typename T, size_t Size>
 class array<T[Size]> :
-    public array_info<T[Size]>
-{
-    friend class array_ref<T[Size]>;
+    public array_info<T[Size]> {
+    using array_type = T[Size];
 
-    using parent_info = array_info<T[Size]>;
+    friend class array_ref<array_type>;
+
+    using parent_info = array_info<array_type>;
 
 private:
-    std::unique_ptr<T[Size]> data_;
-    //static constexpr size_t dims_[dims];
+    std::unique_ptr<array_type> data_;
 
-    static T
-    (*make())[Size]
+    static array_type *
+    alloc()
     {
-        return (T(*)[Size]) new typename parent_info::base_type[parent_info::elems];
+        return (array_type *)
+            new typename parent_info::base_type[parent_info::elems];
     }
 
 public:
     array() :
-        data_(array::make())
+        data_(array::alloc())
     {
     }
 
     array(const array &a) :
-        data_(array::make())
+        data_(array::alloc())
     {
-        ::memcpy(data_.get(), a.data_.get(), parent_info::elems * sizeof(array::base_type));
+        ::memcpy(data_.get(), a.data_.get(),
+                 parent_info::elems * sizeof(array::base_type));
     }
 
     array(array &&a) :
@@ -353,7 +224,7 @@ public:
         static_assert(std::is_same<typename std::remove_all_extents<T2>::type,
                                    typename parent_info::base_type>::value,
                       "Base types do not match");
-        return array_ref<T2>((T2 *) data_.get());
+        return array_ref<T2>(*(T2 *) data_.get());
     }
 
     bool operator==(const array &a) const
@@ -407,7 +278,7 @@ public:
     operator()(Args... args)
     {
         static_assert((sizeof...(Args)) == parent_info::dims, "Wrong number of indexes");
-        return array_get<T[Size]>::get((*data_), args...);
+        return array_get<array_type>::get((*data_), args...);
     }
 
     template <typename... Args>
@@ -415,7 +286,7 @@ public:
     operator()(Args... args) const
     {
         static_assert((sizeof...(Args)) == parent_info::dims, "Wrong number of indexes");
-        return array_get<T[Size]>::get((*data_), args...);
+        return array_get<array_type>::get((*data_), args...);
     }
 
     template <unsigned Idx>
@@ -428,13 +299,13 @@ public:
 
 template <typename T, size_t Size>
 array_ref<T[Size]>::array_ref(array<T[Size]> &a) :
-    data_(a.data_.get())
+    data_(*a.data_.get())
 {
 }
 
 template <typename T, size_t Size>
 const_array_ref<T[Size]>::const_array_ref(const array<T[Size]> &a) :
-    data_(a.data_.get())
+    data_(*a.data_.get())
 {
 }
 

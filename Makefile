@@ -4,7 +4,7 @@ ifeq ($(DEBUG),1)
 	CXXFLAGS=-std=c++11 -O0 -g -Iinclude -fopenmp
     LDFLAGS=-fopenmp -g
 else
-	CXXFLAGS=-std=c++11 -O3 -Iinclude -fopenmp
+	CXXFLAGS=-std=c++11 -O3 -g -Iinclude -fopenmp
     LDFLAGS=-fopenmp
 endif
 

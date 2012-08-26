@@ -26,7 +26,8 @@ namespace map_sched {
         static const unsigned level = 0;
     };
 
-    using automatic = parallel<0>;
+    //using automatic = parallel<0>;
+    using automatic = serial;
 };
 
 template <unsigned Level, typename Func, typename Range, typename Policy>
