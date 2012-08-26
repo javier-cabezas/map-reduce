@@ -34,10 +34,9 @@ template <unsigned Level, typename Func, typename Range, typename Policy>
 struct wrapper_map {
     template<typename... Args>
     static void
-    map(Func f, const Range &r, const Policy &p, Args &&... args)
+    map(Func f, const Range &r, const Policy &p, Args... args)
     {
-        typedef iterator<typename Range::type> myit;
-        typedef dim_type<typename Range::type> mydim;
+        using mydim = typename Range::dim_type;
 
         mydim d = r.get_dim(sizeof...(Args));
 
@@ -61,8 +60,7 @@ struct wrapper_map {
     static void
     map(Func f, const Range &r, const Policy &p)
     {
-        typedef iterator<typename Range::type> myit;
-        typedef dim_type<typename Range::type> mydim;
+        using mydim = typename Range::dim_type;
 
         mydim d = r.get_dim(0);
 

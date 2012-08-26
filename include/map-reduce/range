@@ -1,27 +1,18 @@
 #ifndef GMAP_MAPREDUCE_RANGE_
 #define GMAP_MAPREDUCE_RANGE_
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-
 #include <cassert>
 #include <initializer_list>
 
 template <typename T = int>
-struct dim_type
+struct dim_fancy
 {
     T begin;
     T end;
-             
+
     T step;
 
-    dim_type() :
-        begin(0),
-        end(0),
-        step(0)
-    {
-    }
-
-    dim_type(std::initializer_list<T> l)
+    dim_fancy(std::initializer_list<T> l)
     {
         if (l.size() == 1) {
             begin = 0;
@@ -40,25 +31,19 @@ struct dim_type
             end   = *it;
             ++it;
             step  = *it;
+        } else {
+            abort();
         }
     }
 
-
-    dim_type(T _begin, T _end, T _step = 1) :
+    dim_fancy(T _begin, T _end, T _step) :
         begin(_begin),
         end(_end),
         step(_step)
     {
     }
 
-    dim_type(T _end) :
-        begin(0),
-        end(_end),
-        step(1)
-    {
-    }
-
-    dim_type &operator=(const dim_type &d)
+    dim_fancy &operator=(const dim_fancy &d)
     {
         begin = d.begin;
         end   = d.end;
@@ -66,16 +51,66 @@ struct dim_type
     }
 };
 
-typedef dim_type<int> dim;
+template <typename T = int>
+struct dim
+{
+    T begin;
+    T end;
+
+    static const T step = 1;
+
+    dim() :
+        begin(0),
+        end(0)
+    {
+    }
+
+    dim(std::initializer_list<T> l)
+    {
+        if (l.size() == 1) {
+            begin = 0;
+            end   = *l.begin();
+        } else if (l.size() == 2) {
+            auto it = l.begin();
+            begin = *it;
+            ++it;
+            end   = *it;
+        } else {
+            abort();
+        }
+    }
+
+    dim(T _begin, T _end) :
+        begin(_begin),
+        end(_end)
+    {
+    }
+
+    dim(T _end) :
+        begin(0),
+        end(_end)
+    {
+    }
+
+    dim &operator=(const dim &d)
+    {
+        if (&d != this) {
+            begin = d.begin;
+            end   = d.end;
+        }
+    }
+};
+
+typedef dim_fancy<int> dim_int;
 
 template <typename T>
 struct iterator {
-    const dim_type<T> &dim_;
+    const dim_fancy<T> &dim_;
     T t_;
 
-    iterator(const dim_type<T> &dim) :
-        dim_(dim),
-        t_(dim.begin)
+    iterator(const dim_fancy<T> &dim_fancy) :
+        dim_(dim_fancy),
+        t_(dim_fancy.begin)
     {
     }
 
@@ -96,24 +131,74 @@ struct iterator {
 };
 
 template <unsigned _NDims, typename T = int>
-struct range {
+struct range_fancy {
 
 public:
     typedef T type;
+    typedef dim_fancy<T> dim_type;
     const static unsigned NDims = _NDims;
 
 private:
-    dim_type<T> dims_[NDims];
+    dim_type dims_[NDims];
 
     void
-    init_range(const dim_type<T>& d)
+    init_range(const dim_type &d)
     {
         dims_[NDims - 1] = d;
     }
 
     template <typename... Dims>
     void
-    init_range(const dim_type<T>& d, const Dims &... dims)
+    init_range(const dim_type &d, const Dims &... dims)
+    {
+        dims_[NDims - sizeof...(Dims) - 1] = d;
+        init_range(dims...);
+    }
+public:
+    template <typename... Dims>
+    range_fancy(const Dims &... dims)
+    {
+        static_assert(NDims == sizeof...(Dims), "Dimensions should match");
+
+        init_range(dims...);
+    }
+
+    range_fancy(std::initializer_list<T> list)
+    {
+        assert(NDims == list.size());
+
+        unsigned idx = 0;
+        for (auto d : list) {
+            dims_[idx++] = d;
+        }
+    }
+
+    const dim_type& get_dim(unsigned ndim) const
+    {
+        return dims_[ndim];
+    }
+};
+
+template <unsigned _NDims, typename T = int>
+struct range {
+
+public:
+    typedef T type;
+    typedef dim<T> dim_type;
+    const static unsigned NDims = _NDims;
+
+private:
+    dim_type dims_[NDims];
+
+    void
+    init_range(const dim_type &d)
+    {
+        dims_[NDims - 1] = d;
+    }
+
+    template <typename... Dims>
+    void
+    init_range(const dim_type &d, const Dims &... dims)
     {
         dims_[NDims - sizeof...(Dims) - 1] = d;
         init_range(dims...);
@@ -137,7 +222,7 @@ public:
         }
     }
 
-    const dim_type<T>& get_dim(unsigned ndim) const
+    const dim_type &get_dim(unsigned ndim) const
     {
         return dims_[ndim];
     }
@@ -157,7 +242,21 @@ make_range()
     return range<std::rank<T[Size]>::value, typename std::remove_extent<T>::type>
            (Size, std::extent<T[Size]>::value);
 }
-#endif
+
+template <typename... Dims>
+range<sizeof...(Dims)>
+make_seq_range(const Dims &... dims)
+{
+    return range<sizeof...(Dims)>(dims...);
+}
+
+template <typename T, size_t Size>
+range<std::rank<T[Size]>::value, typename std::remove_extent<T>::type>
+make_seq_range()
+{
+    return range<std::rank<T[Size]>::value, typename std::remove_extent<T>::type>
+           (Size, std::extent<T[Size]>::value);
+}
 
 #endif
 

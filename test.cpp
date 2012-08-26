@@ -60,7 +60,7 @@ int test_reduction_sum()
         {
             a[i] = i + 1;
         },
-        make_range(N));
+        make_range<int>(N));
 
     long sum = reduce([&](int i)
                       {
@@ -477,8 +477,8 @@ size_t test_stencil_static_instance(T &a, T &b, T &c)
 
                 b[i][j] = tmp;
             },
-            make_range(dim_type<int>({ order, int(N) - order}),
-                       dim_type<int>({ order, int(M) - order})));
+            make_range(dim<int>({ order, int(N) - order}),
+                       dim<int>({ order, int(M) - order})));
     }
 
     if (Impl == stencil_impl::map_reduce) {
@@ -490,11 +490,11 @@ size_t test_stencil_static_instance(T &a, T &b, T &c)
                                                        a[i][j - k] + a[i][j + k];
                                            },
                                            reduce_ops<long>::add,
-                                           make_range(dim_type<int>({1, order + 1})));
+                                           make_range(dim<int>({1, order + 1})));
 
             },
-            make_range(dim_type<int>({ order, int(N) - order}),
-                       dim_type<int>({ order, int(M) - order})));
+            make_range(dim<int>({ order, int(N) - order}),
+                       dim<int>({ order, int(M) - order})));
     }
 
     end = std::chrono::system_clock::now();
@@ -546,8 +546,8 @@ size_t test_stencil_dyn_instance(T &a, T &b, T &c, size_t N, size_t M)
 
                 b[i][j] = tmp;
             },
-            make_range(dim_type<int>({ order, int(N) - order}),
-                       dim_type<int>({ order, int(M) - order})));
+            make_range(dim<int>({ order, int(N) - order}),
+                       dim<int>({ order, int(M) - order})));
     }
 
     if (Test) {
@@ -563,11 +563,11 @@ size_t test_stencil_dyn_instance(T &a, T &b, T &c, size_t N, size_t M)
                                                        a[i][j - k] + a[i][j + k];
                                            },
                                            reduce_ops<long>::add,
-                                           make_range(dim_type<int>({1, order + 1})));
+                                           make_range(dim<int>({1, order + 1})));
 
             },
-            make_range(dim_type<int>({ order, int(N) - order}),
-                       dim_type<int>({ order, int(M) - order})));
+            make_range(dim<int>({ order, int(N) - order}),
+                       dim<int>({ order, int(M) - order})));
     }
 
     if (Test) {

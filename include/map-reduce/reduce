@@ -58,7 +58,7 @@ template <unsigned Level, typename Access, typename Range>
 struct invoker {
     template<typename... Args>
     static typename reduce_traits<Access>::return_type
-    invoke(Access a, const Range &r, Args &&... args)
+    invoke(Access a, const Range &r, Args... args)
     {
         return invoker<Level - 1, Access, Range>::invoke(a, r, args..., r.get_dim(sizeof...(Args)).begin);
     }
@@ -68,7 +68,7 @@ template <typename Access, typename Range>
 struct invoker<0, Access, Range> {
     template<typename... Args>
     static typename reduce_traits<Access>::return_type
-    invoke(Access a, const Range &r, Args &&... args)
+    invoke(Access a, const Range &r, Args... args)
     {
         return a(args...);
     }
@@ -78,10 +78,9 @@ template <unsigned Level, typename Ret, typename Access, typename Func, typename
 struct wrapper_reduce {
     template<typename... Args>
     static Ret
-    reduce(Access a, Func f, const Range &r, const Policy &p, Ret tmp, Args &&... args)
+    reduce(Access a, Func f, const Range &r, const Policy &p, Ret tmp, Args... args)
     {
-        typedef iterator<typename Range::type> myit;
-        typedef dim_type<typename Range::type> mydim;
+        using mydim = typename Range::dim_type;
 
         mydim d = r.get_dim(sizeof...(Args));
 
@@ -154,8 +153,7 @@ struct wrapper_reduce {
     static Ret
     reduce(Access a, Func f, const Range &r, const Policy &p)
     {
-        typedef iterator<typename Range::type> myit;
-        typedef dim_type<typename Range::type> mydim;
+        using mydim = typename Range::dim_type;
 
         mydim d = r.get_dim(0);
 
@@ -231,7 +229,7 @@ template <typename Ret, typename Access, typename Func, typename Range, typename
 struct wrapper_reduce<0, Ret, Access, Func, Range, Policy> {
     template<typename... Args>
     static Ret
-    reduce(Access a, Func f, const Range &/*r*/, const Policy &/*p*/, Ret tmp, Args &&... args)
+    reduce(Access a, Func f, const Range &/*r*/, const Policy &/*p*/, Ret tmp, Args... args)
     {
         return f(a(args...), tmp);
     }
