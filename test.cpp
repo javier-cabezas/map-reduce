@@ -3,9 +3,9 @@
  *
  * Copyright (C) 2011, Javier Cabezas <jcabezas in ac upc edu> {{{
  *
- * This program is free software; you can redistribute it and/or 
- * modify it under the terms of the GNU General Public License 
- * as published by the Free Software Foundation; either 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either
  * version 2 of the License, or any later version.
  *
  * This program is distributed in the hope that it will be useful,
@@ -21,6 +21,7 @@
 
 #include <chrono>
 #include <iostream>
+#include <string>
 
 #include <map-reduce/map>
 #include <map-reduce/array>
@@ -35,6 +36,13 @@
 #define C4 4.9f
 
 using namespace map_reduce;
+
+void print_banner(const std::string &name)
+{
+    std::cout << std::string(name.size(), '=') << std::endl;
+    std::cout << name << std::endl;
+    std::cout << std::string(name.size(), '=') << std::endl;
+}
 
 template <typename T>
 int func_greater(T x, T y)
@@ -261,7 +269,7 @@ int test_reduction()
     end = std::chrono::system_clock::now();
 
     std::cout << "Max: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
-    
+
     start = std::chrono::system_clock::now();
 
     test_reduction_max_2d<1,1>();
@@ -368,6 +376,15 @@ size_t test_matrixmul_dyn_instance(T &c, T &a, T &b, size_t N, size_t M)
 {
     std::chrono::time_point<std::chrono::system_clock> start, end;
 
+    map([&](int i, int j)
+        {
+            a[i][j] = N * i + j + 1;
+            b[i][j] = N * i + j + 1;
+        },
+        make_range(N, M));
+
+    start = std::chrono::system_clock::now();
+
     if (Impl == matrixmul_impl::pure) {
         for (unsigned i = 0; i < N; ++i) {
             for (unsigned j = 0; j < M; ++j) {
@@ -379,8 +396,6 @@ size_t test_matrixmul_dyn_instance(T &c, T &a, T &b, size_t N, size_t M)
             }
         }
     }
-
-    start = std::chrono::system_clock::now();
 
     if (Impl == matrixmul_impl::map) {
         map([&](int i, int j)
@@ -647,13 +662,9 @@ size_t test_transpose_dyn_instance(T &a, T &b, size_t N, size_t M)
     return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 }
 
-int test_matrixmul_static()
+void test_matrixmul_static()
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-
-    std::cout << "=================================" << std::endl;
-    std::cout << "Matrix multiplication pure static" << std::endl;
-    std::cout << "=================================" << std::endl;
+    print_banner("Matrixmul static");
 
     static const size_t N = 1000;
     static const size_t M = 1000;
@@ -674,17 +685,11 @@ int test_matrixmul_static()
     delete [] &a;
     delete [] &b;
     delete [] &c;
-
-    return 0;
 }
 
-int test_stencil_static()
+void test_stencil_static()
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-
-    std::cout << "==========================" << std::endl;
-    std::cout << "Matrix stencil pure static" << std::endl;
-    std::cout << "==========================" << std::endl;
+    print_banner("Stencil static");
 
     static const size_t N = 1000;
     static const size_t M = 1000;
@@ -705,17 +710,11 @@ int test_stencil_static()
     delete [] &a;
     delete [] &b;
     delete [] &c;
-
-    return 0;
 }
 
-int test_transpose_static()
+void test_transpose_static()
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-
-    std::cout << "============================" << std::endl;
-    std::cout << "Matrix transpose pure static" << std::endl;
-    std::cout << "============================" << std::endl;
+    print_banner("Transpose static");
 
     static const size_t N = 1000;
     static const size_t M = 1000;
@@ -731,17 +730,11 @@ int test_transpose_static()
 
     delete [] &a;
     delete [] &b;
-
-    return 0;
 }
 
-int test_matrixmul()
+void test_matrixmul()
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-
-    std::cout << "=====================" << std::endl;
-    std::cout << "Matrix multiplication" << std::endl;
-    std::cout << "=====================" << std::endl;
+    print_banner("Matrix matrixmul");
 
     static const size_t N = 1000;
     static const size_t M = 1000;
@@ -760,13 +753,9 @@ int test_matrixmul()
     std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 }
 
-int test_stencil()
+void test_stencil()
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-
-    std::cout << "==============" << std::endl;
-    std::cout << "Matrix stencil" << std::endl;
-    std::cout << "==============" << std::endl;
+    print_banner("Matrix stencil");
 
     static const size_t N = 1000;
     static const size_t M = 1000;
@@ -783,17 +772,11 @@ int test_stencil()
 
     usecs = test_stencil_static_instance<stencil_impl::map_reduce, array<long[N][M]>, N, M>(a, b, c);
     std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-
-    return 0;
 }
 
-int test_transpose()
+void test_transpose()
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-
-    std::cout << "================" << std::endl;
-    std::cout << "Matrix transpose" << std::endl;
-    std::cout << "================" << std::endl;
+    print_banner("Matrix transpose");
 
     static const size_t N = 1000;
     static const size_t M = 1000;
@@ -806,17 +789,11 @@ int test_transpose()
 
     usecs = test_transpose_static_instance<transpose_impl::map, array<long[N][M]>, N, M>(a, b);
     std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-
-    return 0;
 }
 
-int test_matrixmul_dyn()
+void test_matrixmul_dyn()
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-
-    std::cout << "================================" << std::endl;
-    std::cout << "Matrix multiplication (dynarray)" << std::endl;
-    std::cout << "================================" << std::endl;
+    print_banner("Matrix matrixmul (dynarray)");
 
     static const size_t N = 1000;
     static const size_t M = 1000;
@@ -837,13 +814,9 @@ int test_matrixmul_dyn()
     std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 }
 
-int test_stencil_dyn()
+void test_stencil_dyn()
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-
-    std::cout << "=========================" << std::endl;
-    std::cout << "Matrix stencil (dynarray)" << std::endl;
-    std::cout << "=========================" << std::endl;
+    print_banner("Matrix stencil (dynarray)");
 
     static const size_t N = 1000;
     static const size_t M = 1000;
@@ -862,17 +835,11 @@ int test_stencil_dyn()
 
     usecs = test_stencil_dyn_instance<stencil_impl::map_reduce, array_type>(a, b, c, N, M);
     std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-
-    return 0;
 }
 
-int test_transpose_dyn()
+void test_transpose_dyn()
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-
-    std::cout << "===========================" << std::endl;
-    std::cout << "Matrix transpose (dynarray)" << std::endl;
-    std::cout << "===========================" << std::endl;
+    print_banner("Matrix transpose (dynarray)");
 
     static const size_t N = 1000;
     static const size_t M = 1000;
@@ -886,17 +853,11 @@ int test_transpose_dyn()
 
     usecs = test_transpose_dyn_instance<transpose_impl::map, array_type>(a, b, N, M);
     std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-
-    return 0;
 }
 
-int test_matrixmul_boost()
+void test_matrixmul_boost()
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-
-    std::cout << "=============================" << std::endl;
-    std::cout << "Matrix multiplication (boost)" << std::endl;
-    std::cout << "=============================" << std::endl;
+    print_banner("Matrix matrixmul (boost)");
 
     static const size_t N = 1000;
     static const size_t M = 1000;
@@ -917,13 +878,9 @@ int test_matrixmul_boost()
     std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
 }
 
-int test_stencil_boost()
+void test_stencil_boost()
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-
-    std::cout << "======================" << std::endl;
-    std::cout << "Matrix stencil (boost)" << std::endl;
-    std::cout << "======================" << std::endl;
+    print_banner("Matrix stencil (boost)");
 
     static const size_t N = 1000;
     static const size_t M = 1000;
@@ -942,15 +899,11 @@ int test_stencil_boost()
 
     test_stencil_dyn_instance<stencil_impl::map_reduce, array_type>(a, b, c, N, M);
     std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-
-    return 0;
 }
 
-int test_transpose_boost()
+void test_transpose_boost()
 {
-    std::cout << "========================" << std::endl;
-    std::cout << "Matrix transpose (boost)" << std::endl;
-    std::cout << "========================" << std::endl;
+    print_banner("Matrix transpose (boost)");
 
     static const size_t N = 1000;
     static const size_t M = 1000;
@@ -965,12 +918,9 @@ int test_transpose_boost()
 
     test_transpose_dyn_instance<transpose_impl::map, array_type>(a, b, N, M);
     std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-
-    return 0;
 }
 
-
-int test_array()
+void test_array()
 {
     array<int[10][10]> a;
     array<int[10][10]> b;
@@ -987,11 +937,9 @@ int test_array()
             assert(b[i][j] == a(i, j));
         }
     }
-
-    return 0;
 }
 
-int test_dynarray()
+void test_dynarray()
 {
     dynarray<int, 2> a(10, 10);
     dynarray<int, 2> b(10, 10);
@@ -1008,17 +956,13 @@ int test_dynarray()
             assert(b[i][j] == a(i, j));
         }
     }
-
-    return 0;
 }
 
-int test_ref()
+void test_ref()
 {
     array<int[10][1]> a;
     array_ref<int[10][1]> a_ref(a);
     array_ref<int[1][10]> b_ref(a.reshape<int[1][10]>());
-
-    return 0;
 }
 
 int main(int argc, char *argv[])

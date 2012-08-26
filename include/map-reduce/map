@@ -88,7 +88,7 @@ template <typename Func, typename Range, typename Policy>
 struct wrapper_map<0, Func, Range, Policy> {
     template<typename... Args>
     static void
-    map(Func f, const Range &r, const Policy &p, Args &&... args)
+    map(Func f, const Range &r, const Policy &p, Args ... args)
     {
         f(args...);
     }
