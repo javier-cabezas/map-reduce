@@ -30,9 +30,19 @@
 
 #include <boost/multi_array.hpp>
 
-#include "common.hpp"
+#define C1 2.3f
+#define C2 3.2f
+#define C3 1.7f
+#define C4 4.9f
 
 using namespace map_reduce;
+
+void print_banner(const std::string &name)
+{
+    std::cout << std::string(name.size(), '=') << std::endl;
+    std::cout << name << std::endl;
+    std::cout << std::string(name.size(), '=') << std::endl;
+}
 
 template <typename T>
 int func_greater(T x, T y)
@@ -417,317 +427,111 @@ size_t test_matrixmul_dyn_instance(T &c, T &a, T &b, size_t N, size_t M)
     return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 }
 
-enum class transpose_impl {
-    pure,
-    map
-};
-
-template <transpose_impl Impl, typename T, size_t N, size_t M, bool Test = false>
-size_t test_transpose_static_instance(T &a, T &b)
-{
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-
-    map([&](int i, int j)
-        {
-            a[i][j] = N * i + j + 1;
-            if (Test) {
-                b[i][j] = N * i + j + 1;
-            }
-        },
-        make_range(N, M));
-
-    start = std::chrono::system_clock::now();
-
-    if (Impl == transpose_impl::pure) {
-        for (unsigned i = 0; i < N; ++i) {
-            for (unsigned j = 0; j < i; ++j) {
-                std::swap(b[i][j], b[j][i]);
-            }
-        }
-    }
-
-    if (Impl == transpose_impl::map) {
-        map([&](int i, int j)
-            {
-                if (j < i) std::swap(a[i][j], a[j][i]);
-            },
-            make_range(N, M));
-    }
-
-    end = std::chrono::system_clock::now();
-
-    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-}
-
-template <transpose_impl Impl, typename T, bool Test = false>
-size_t test_transpose_dyn_instance(T &a, T &b, size_t N, size_t M)
-{
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-
-    map([&](int i, int j)
-        {
-            a[i][j] = N * i + j + 1;
-            if (Test) {
-                b[i][j] = N * i + j + 1;
-            }
-        },
-        make_range(N, M));
-
-    start = std::chrono::system_clock::now();
-
-    if (Impl == transpose_impl::pure || Test) {
-        for (unsigned i = 0; i < N; ++i) {
-            for (unsigned j = 0; j < i; ++j) {
-                std::swap(b[i][j], b[j][i]);
-            }
-        }
-    }
-
-    if (Impl == transpose_impl::map || Test) {
-        map([&](int i, int j)
-            {
-                if (j < i) std::swap(a[i][j], a[j][i]);
-            },
-            make_range(N, M));
-    }
-
-    if (Test) {
-        assert(a == b);
-    }
-
-    end = std::chrono::system_clock::now();
-
-    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-}
-
+template <size_t N>
 void test_matrixmul_static()
 {
     print_banner("Matrixmul static");
 
-    static const size_t N = 1000;
-    static const size_t M = 1000;
+    long (&a)[N][N] = *(long (*)[N][N]) new long[N * N];
+    long (&b)[N][N] = *(long (*)[N][N]) new long[N * N];
+    long (&c)[N][N] = *(long (*)[N][N]) new long[N * N];
 
-    long (&a)[N][M] = *(long (*)[N][M]) new long[N * M];
-    long (&b)[N][M] = *(long (*)[N][M]) new long[N * M];
-    long (&c)[N][M] = *(long (*)[N][M]) new long[N * M];
+    auto usecs = test_matrixmul_static_instance<matrixmul_impl::pure, long (&)[N][N], N, N>(c, a, b);
+    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
 
-    auto usecs = test_matrixmul_static_instance<matrixmul_impl::pure, long (&)[N][M], N, M>(c, a, b);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
+    usecs = test_matrixmul_static_instance<matrixmul_impl::map, long (&)[N][N], N, N>(c, a, b);
+    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
 
-    usecs = test_matrixmul_static_instance<matrixmul_impl::map, long (&)[N][M], N, M>(c, a, b);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-
-    usecs = test_matrixmul_static_instance<matrixmul_impl::map_reduce, long (&)[N][M], N, M>(c, a, b);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
+    usecs = test_matrixmul_static_instance<matrixmul_impl::map_reduce, long (&)[N][N], N, N>(c, a, b);
+    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
 
     delete [] &a;
     delete [] &b;
     delete [] &c;
 }
 
-void test_transpose_static()
-{
-    print_banner("Transpose static");
-
-    static const size_t N = 1000;
-    static const size_t M = 1000;
-
-    long (&a)[N][M] = *(long (*)[N][M]) new long[N * M];
-    long (&b)[N][M] = *(long (*)[N][M]) new long[N * M];
-
-    auto usecs = test_transpose_static_instance<transpose_impl::pure, long (&)[N][M], N, M>(a, b);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-
-    usecs = test_transpose_static_instance<transpose_impl::map, long (&)[N][M], N, M>(a, b);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-
-    delete [] &a;
-    delete [] &b;
-}
-
+template <size_t N>
 void test_matrixmul()
 {
     print_banner("Matrix matrixmul");
 
-    static const size_t N = 1000;
-    static const size_t M = 1000;
+    array<long[N][N]> a;
+    array<long[N][N]> b;
+    array<long[N][N]> c;
 
-    array<long[N][M]> a;
-    array<long[N][M]> b;
-    array<long[N][M]> c;
+    auto usecs = test_matrixmul_static_instance<matrixmul_impl::pure, array<long[N][N]>, N, N>(c, a, b);
+    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
 
-    auto usecs = test_matrixmul_static_instance<matrixmul_impl::pure, array<long[N][M]>, N, M>(c, a, b);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
+    usecs = test_matrixmul_static_instance<matrixmul_impl::map, array<long[N][N]>, N, N>(c, a, b);
+    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
 
-    usecs = test_matrixmul_static_instance<matrixmul_impl::map, array<long[N][M]>, N, M>(c, a, b);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-
-    usecs = test_matrixmul_static_instance<matrixmul_impl::map_reduce, array<long[N][M]>, N, M>(c, a, b);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
+    usecs = test_matrixmul_static_instance<matrixmul_impl::map_reduce, array<long[N][N]>, N, N>(c, a, b);
+    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
 }
 
-void test_transpose()
-{
-    print_banner("Matrix transpose");
-
-    static const size_t N = 1000;
-    static const size_t M = 1000;
-
-    array<long[N][M]> a;
-    array<long[N][M]> b;
-
-    auto usecs = test_transpose_static_instance<transpose_impl::pure, array<long[N][M]>, N, M>(a, b);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-
-    usecs = test_transpose_static_instance<transpose_impl::map, array<long[N][M]>, N, M>(a, b);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-}
-
+template <size_t N>
 void test_matrixmul_dyn()
 {
     print_banner("Matrix matrixmul (dynarray)");
 
-    static const size_t N = 1000;
-    static const size_t M = 1000;
-
     using array_type = dynarray<long, 2>;
-    array_type a(N, M);
-    array_type b(N, M);
+    array_type a(N, N);
+    array_type b(N, N);
 
-    array_type c(N, M), c_gold(N, M);
+    array_type c(N, N), c_gold(N, N);
 
-    auto usecs = test_matrixmul_dyn_instance<matrixmul_impl::pure, array_type>(c, a, b, N, M);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
+    auto usecs = test_matrixmul_dyn_instance<matrixmul_impl::pure, array_type>(c, a, b, N, N);
+    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
 
-    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map, array_type>(c, a, b, N, M);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
+    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map, array_type>(c, a, b, N, N);
+    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
 
-    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map_reduce, array_type>(c, a, b, N, M);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
+    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map_reduce, array_type>(c, a, b, N, N);
+    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
 }
 
-void test_transpose_dyn()
-{
-    print_banner("Matrix transpose (dynarray)");
-
-    static const size_t N = 1000;
-    static const size_t M = 1000;
-
-    using array_type = dynarray<long, 2>;
-    array_type a(N, M);
-    array_type b(N, M);
-
-    auto usecs = test_transpose_dyn_instance<transpose_impl::pure, array_type>(a, b, N, M);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-
-    usecs = test_transpose_dyn_instance<transpose_impl::map, array_type>(a, b, N, M);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-}
-
+template <size_t N>
 void test_matrixmul_boost()
 {
     print_banner("Matrix matrixmul (boost)");
 
-    static const size_t N = 1000;
-    static const size_t M = 1000;
-
     typedef boost::multi_array<long, 2> array_type;
 
-    array_type a(boost::extents[N][M]);
-    array_type b(boost::extents[N][M]);
-    array_type c(boost::extents[N][M]);
+    array_type a(boost::extents[N][N]);
+    array_type b(boost::extents[N][N]);
+    array_type c(boost::extents[N][N]);
 
-    auto usecs = test_matrixmul_dyn_instance<matrixmul_impl::pure, array_type>(c, a, b, N, M);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
+    auto usecs = test_matrixmul_dyn_instance<matrixmul_impl::pure, array_type>(c, a, b, N, N);
+    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
 
-    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map, array_type>(c, a, b, N, M);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
+    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map, array_type>(c, a, b, N, N);
+    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
 
-    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map_reduce, array_type>(c, a, b, N, M);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
+    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map_reduce, array_type>(c, a, b, N, N);
+    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
 }
 
-void test_transpose_boost()
+void test_matrixmul()
 {
-    print_banner("Matrix transpose (boost)");
+    test_matrixmul_static<100>();
+    test_matrixmul<100>();
+    test_matrixmul_dyn<100>();
+    test_matrixmul_boost<100>();
 
-    static const size_t N = 1000;
-    static const size_t M = 1000;
+    test_matrixmul_static<500>();
+    test_matrixmul<500>();
+    test_matrixmul_dyn<500>();
+    test_matrixmul_boost<500>();
 
-    typedef boost::multi_array<long, 2> array_type;
-
-    array_type a(boost::extents[N][M]);
-    array_type b(boost::extents[N][M]);
-
-    auto usecs = test_transpose_dyn_instance<transpose_impl::pure, array_type>(a, b, N, M);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-
-    test_transpose_dyn_instance<transpose_impl::map, array_type>(a, b, N, M);
-    std::cout << "1000x1000: " << usecs << " usecs " << std::endl;
-}
-
-void test_array()
-{
-    array<int[10][10]> a;
-    array<int[10][10]> b;
-
-    for (unsigned i = 0; i < a.get_size<0>(); ++i) {
-        for (unsigned j = 0; j < a.get_size<1>(); ++j) {
-            a[i][j] = i * j;
-            b(i, j) = i * j;
-        }
-    }
-
-    for (unsigned i = 0; i < a.get_size<0>(); ++i) {
-        for (unsigned j = 0; j < a.get_size<1>(); ++j) {
-            assert(b[i][j] == a(i, j));
-        }
-    }
-}
-
-void test_dynarray()
-{
-    dynarray<int, 2> a(10, 10);
-    dynarray<int, 2> b(10, 10);
-
-    for (unsigned i = 0; i < a.get_size(0); ++i) {
-        for (unsigned j = 0; j < a.get_size(1); ++j) {
-            a[i][j] = i * 10 + j;
-            b(i, j) = i * 10 + j;
-        }
-    }
-
-    for (unsigned i = 0; i < a.get_size(0); ++i) {
-        for (unsigned j = 0; j < a.get_size(1); ++j) {
-            assert(b[i][j] == a(i, j));
-        }
-    }
-}
-
-void test_ref()
-{
-    array<int[10][1]> a;
-    array_ref<int[10][1]> a_ref(a);
-    array_ref<int[1][10]> b_ref(a.reshape<int[1][10]>());
+    test_matrixmul_static<1000>();
+    test_matrixmul<1000>();
+    test_matrixmul_dyn<1000>();
+    test_matrixmul_boost<1000>();
 }
 
 int main(int argc, char *argv[])
 {
-    test_array();
-    test_dynarray();
-    test_ref();
-
-    test_reduction();
-
-    test_transpose_static();
-    test_transpose();
-    test_transpose_dyn();
-    test_transpose_boost();
-
-    test_matrixmul_static();
     test_matrixmul();
-    test_matrixmul_dyn();
-    test_matrixmul_boost();
 
     return 0;
 }

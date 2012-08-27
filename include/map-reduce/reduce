@@ -33,8 +33,8 @@ namespace reduce_sched {
         static const unsigned level = 0;
     };
 
-    using automatic = parallel<0>;
-    //using automatic = serial;
+    //using automatic = parallel<0>;
+    using automatic = serial;
 };
 
 
