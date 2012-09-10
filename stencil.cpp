@@ -45,7 +45,7 @@ enum class stencil_impl {
     map_reduce
 };
 
-template <int Order, stencil_impl Impl, typename T, size_t N, size_t M, bool Test = false>
+template <int Order, stencil_impl Impl, typename T, size_t N, size_t M, bool Test = DoTest>
 size_t test_stencil_static_instance(T &a, T &b, T &c)
 {
     std::chrono::time_point<std::chrono::system_clock> start, end;
@@ -64,7 +64,7 @@ size_t test_stencil_static_instance(T &a, T &b, T &c)
 
     start = std::chrono::system_clock::now();
 
-    if (Impl == stencil_impl::pure) {
+    if (Impl == stencil_impl::pure || Test) {
         for (unsigned i = Order; i < N - Order; ++i) {
             for (unsigned j = Order; j < M - Order; ++j) {
                 long tmp = a[i][j];
@@ -97,6 +97,10 @@ size_t test_stencil_static_instance(T &a, T &b, T &c)
                        dim<int>({ Order, int(M) - Order})));
     }
 
+    if (Test) {
+        assert(b == c);
+    }
+
     if (Impl == stencil_impl::map_reduce) {
         map([&](int i, int j)
             {
@@ -113,12 +117,16 @@ size_t test_stencil_static_instance(T &a, T &b, T &c)
                        dim<int>({ Order, int(M) - Order})));
     }
 
+    if (Test) {
+        assert(b == c);
+    }
+
     end = std::chrono::system_clock::now();
 
     return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 }
 
-template <int Order, stencil_impl Impl, typename T, bool Test = false>
+template <int Order, stencil_impl Impl, typename T, bool Test = DoTest>
 size_t test_stencil_dyn_instance(T &a, T &b, T &c, size_t N, size_t M)
 {
     std::chrono::time_point<std::chrono::system_clock> start, end;
@@ -202,7 +210,7 @@ size_t test_stencil_dyn_instance(T &a, T &b, T &c, size_t N, size_t M)
 template <size_t Order, size_t N>
 void test_stencil_static()
 {
-    print_banner("Stencil static");
+    print_banner("2D stencil (static)");
 
     long (&a)[N][N] = *(long (*)[N][N]) new long[N * N];
     long (&b)[N][N] = *(long (*)[N][N]) new long[N * N];
@@ -225,7 +233,7 @@ void test_stencil_static()
 template <size_t Order, size_t N>
 void test_stencil()
 {
-    print_banner("Matrix stencil");
+    print_banner("2D stencil (array)");
 
     array<long[N][N]> a;
     array<long[N][N]> b;
@@ -244,7 +252,7 @@ void test_stencil()
 template <size_t Order, size_t N>
 void test_stencil_dyn()
 {
-    print_banner("Matrix stencil (dynarray)");
+    print_banner("2D stencil (dynarray)");
 
     using array_type = dynarray<long, 2>;
     array_type a(N, N);
@@ -265,7 +273,7 @@ void test_stencil_dyn()
 template <size_t Order, size_t N>
 void test_stencil_boost()
 {
-    print_banner("Matrix stencil (boost)");
+    print_banner("2D stencil (boost::multi_array)");
 
     typedef boost::multi_array<long, 2> array_type;
 
