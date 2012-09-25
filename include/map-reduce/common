@@ -29,7 +29,8 @@ struct memb_func_traits<R (ClassT::*) (Arg...) const>
 
 struct OK {};
 
-static __thread bool in_parallel = false;
+//static __thread bool in_parallel = false;
+#define in_parallel false
 
 template <typename F, typename Enable = void> 
 struct reduce_traits;

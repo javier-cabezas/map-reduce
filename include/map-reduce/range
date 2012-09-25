@@ -12,30 +12,6 @@ struct dim_fancy
 
     T step;
 
-    dim_fancy(std::initializer_list<T> l)
-    {
-        if (l.size() == 1) {
-            begin = 0;
-            end   = *l.begin();
-            step  = 1;
-        } else if (l.size() == 2) {
-            auto it = l.begin();
-            begin = *it;
-            ++it;
-            end   = *it;
-            step  = 1;
-        } else if (l.size() == 3) {
-            auto it = l.begin();
-            begin = *it;
-            ++it;
-            end   = *it;
-            ++it;
-            step  = *it;
-        } else {
-            abort();
-        }
-    }
-
     dim_fancy(T _begin, T _end, T _step) :
         begin(_begin),
         end(_end),
@@ -65,21 +41,6 @@ struct dim
     {
     }
 
-    dim(std::initializer_list<T> l)
-    {
-        if (l.size() == 1) {
-            begin = 0;
-            end   = *l.begin();
-        } else if (l.size() == 2) {
-            auto it = l.begin();
-            begin = *it;
-            ++it;
-            end   = *it;
-        } else {
-            abort();
-        }
-    }
-
     dim(T _begin, T _end) :
         begin(_begin),
         end(_end)
@@ -98,6 +59,8 @@ struct dim
             begin = d.begin;
             end   = d.end;
         }
+
+        return *this;
     }
 };
 
@@ -132,7 +95,6 @@ struct iterator {
 
 template <unsigned _NDims, typename T = int>
 struct range_fancy {
-
 public:
     typedef T type;
     typedef dim_fancy<T> dim_type;
@@ -141,6 +103,7 @@ public:
 private:
     dim_type dims_[NDims];
 
+    inline
     void
     init_range(const dim_type &d)
     {
@@ -148,6 +111,7 @@ private:
     }
 
     template <typename... Dims>
+    inline
     void
     init_range(const dim_type &d, const Dims &... dims)
     {
@@ -156,6 +120,7 @@ private:
     }
 public:
     template <typename... Dims>
+    inline
     range_fancy(const Dims &... dims)
     {
         static_assert(NDims == sizeof...(Dims), "Dimensions should match");
@@ -163,6 +128,7 @@ public:
         init_range(dims...);
     }
 
+#if 0
     range_fancy(std::initializer_list<T> list)
     {
         assert(NDims == list.size());
@@ -172,8 +138,10 @@ public:
             dims_[idx++] = d;
         }
     }
+#endif
 
-    const dim_type& get_dim(unsigned ndim) const
+    inline
+    dim_type get_dim(unsigned ndim)
     {
         return dims_[ndim];
     }
@@ -212,6 +180,7 @@ public:
         init_range(dims...);
     }
 
+#if 0
     range(std::initializer_list<T> list)
     {
         assert(NDims == list.size());
@@ -221,6 +190,7 @@ public:
             dims_[idx++] = d;
         }
     }
+#endif
 
     const dim_type &get_dim(unsigned ndim) const
     {

@@ -14,12 +14,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
+ * adata_type with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  * }}}
  */
 
-#include <chrono>
 #include <iostream>
 #include <string>
 
@@ -48,7 +47,7 @@ enum class stencil_impl {
 template <int Order, stencil_impl Impl, typename T, size_t N, size_t M, bool Test = DoTest>
 size_t test_stencil_static_instance(T &a, T &b, T &c)
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
+    my_time_point start, end;
 
     map([&](int i, int j)
         {
@@ -62,12 +61,12 @@ size_t test_stencil_static_instance(T &a, T &b, T &c)
 
     fill_cache();
 
-    start = std::chrono::system_clock::now();
+    start = my_clock::now();
 
     if (Impl == stencil_impl::pure || Test) {
         for (unsigned i = Order; i < N - Order; ++i) {
             for (unsigned j = Order; j < M - Order; ++j) {
-                long tmp = a[i][j];
+                data_type tmp = a[i][j];
                 for (int k = 1; k <= Order; ++k) {
                     tmp += a[i - k][j] + a[i + k][j] +
                            a[i][j - k] + a[i][j + k];
@@ -85,7 +84,7 @@ size_t test_stencil_static_instance(T &a, T &b, T &c)
     if (Impl == stencil_impl::map) {
         map([&](int i, int j)
             {
-                long tmp = a[i][j];
+                data_type tmp = a[i][j];
                 for (int k = 1; k <= Order; ++k) {
                     tmp += a[i - k][j] + a[i + k][j] +
                            a[i][j - k] + a[i][j + k];
@@ -93,12 +92,12 @@ size_t test_stencil_static_instance(T &a, T &b, T &c)
 
                 b[i][j] = tmp;
             },
-            make_range(dim<int>({ Order, int(N) - Order}),
-                       dim<int>({ Order, int(M) - Order})));
+            make_range(dim<int>(Order, int(N) - Order),
+                       dim<int>(Order, int(M) - Order)));
     }
 
     if (Test) {
-        assert(b == c);
+        // assert(b == c);
     }
 
     if (Impl == stencil_impl::map_reduce) {
@@ -109,27 +108,27 @@ size_t test_stencil_static_instance(T &a, T &b, T &c)
                                                 return a[i - k][j] + a[i + k][j] +
                                                        a[i][j - k] + a[i][j + k];
                                            },
-                                           reduce_ops<long>::add,
-                                           make_range(dim<int>({1, Order + 1})));
+                                           reduce_ops<data_type>::add,
+                                           make_range(dim<int>(1, Order + 1)));
 
             },
-            make_range(dim<int>({ Order, int(N) - Order}),
-                       dim<int>({ Order, int(M) - Order})));
+            make_range(dim<int>(Order, int(N) - Order),
+                       dim<int>(Order, int(M) - Order)));
     }
 
     if (Test) {
-        assert(b == c);
+        // assert(b == c);
     }
 
-    end = std::chrono::system_clock::now();
+    end = my_clock::now();
 
-    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    return microsecond_cast(end - start).count();
 }
 
 template <int Order, stencil_impl Impl, typename T, bool Test = DoTest>
 size_t test_stencil_dyn_instance(T &a, T &b, T &c, size_t N, size_t M)
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
+    my_time_point start, end;
 
     map([&](int i, int j)
         {
@@ -143,12 +142,12 @@ size_t test_stencil_dyn_instance(T &a, T &b, T &c, size_t N, size_t M)
 
     fill_cache();
 
-    start = std::chrono::system_clock::now();
+    start = my_clock::now();
 
     if (Impl == stencil_impl::pure || Test) {
         for (unsigned i = Order; i < N - Order; ++i) {
             for (unsigned j = Order; j < M - Order; ++j) {
-                long tmp = a[i][j];
+                data_type tmp = a[i][j];
                 for (int k = 1; k <= Order; ++k) {
                     tmp += a[i - k][j] + a[i + k][j] +
                            a[i][j - k] + a[i][j + k];
@@ -166,7 +165,7 @@ size_t test_stencil_dyn_instance(T &a, T &b, T &c, size_t N, size_t M)
     if (Impl == stencil_impl::map || Test) {
         map([&](int i, int j)
             {
-                long tmp = a[i][j];
+                data_type tmp = a[i][j];
                 for (int k = 1; k <= Order; ++k) {
                     tmp += a[i - k][j] + a[i + k][j] +
                            a[i][j - k] + a[i][j + k];
@@ -174,8 +173,8 @@ size_t test_stencil_dyn_instance(T &a, T &b, T &c, size_t N, size_t M)
 
                 b[i][j] = tmp;
             },
-            make_range(dim<int>({ Order, int(N) - Order}),
-                       dim<int>({ Order, int(M) - Order})));
+            make_range(dim<int>(Order, int(N) - Order),
+                       dim<int>(Order, int(M) - Order)));
     }
 
     if (Test) {
@@ -190,40 +189,50 @@ size_t test_stencil_dyn_instance(T &a, T &b, T &c, size_t N, size_t M)
                                                 return a[i - k][j] + a[i + k][j] +
                                                        a[i][j - k] + a[i][j + k];
                                            },
-                                           reduce_ops<long>::add,
+                                           reduce_ops<data_type>::add,
                                            make_range(dim<int>({1, Order + 1})));
 
             },
-            make_range(dim<int>({ Order, int(N) - Order}),
-                       dim<int>({ Order, int(M) - Order})));
+            make_range(dim<int>(Order, int(N) - Order),
+                       dim<int>(Order, int(M) - Order)));
     }
 
     if (Test) {
         assert(b == c);
     }
 
-    end = std::chrono::system_clock::now();
+    end = my_clock::now();
 
-    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    return microsecond_cast(end - start).count();
 }
 
 template <size_t Order, size_t N>
 void test_stencil_static()
 {
-    print_banner("2D stencil (static)");
+    data_type (&a)[N][N] = *(data_type (*)[N][N]) new data_type[N * N];
+    data_type (&b)[N][N] = *(data_type (*)[N][N]) new data_type[N * N];
+    data_type (&c)[N][N] = *(data_type (*)[N][N]) new data_type[N * N];
 
-    long (&a)[N][N] = *(long (*)[N][N]) new long[N * N];
-    long (&b)[N][N] = *(long (*)[N][N]) new long[N * N];
-    long (&c)[N][N] = *(long (*)[N][N]) new long[N * N];
+    std::cout << "S:" << Order << "_" << N << ",";
 
-    auto usecs = test_stencil_static_instance<Order, stencil_impl::pure, long (&)[N][N], N, N>(a, b, c);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::vector<size_t> usecs(Iterations);
 
-    usecs = test_stencil_static_instance<Order, stencil_impl::map, long (&)[N][N], N, N>(a, b, c);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_stencil_static_instance<Order, stencil_impl::pure, data_type (&)[N][N], N, N>(a, b, c);
+    }
+    print_stats(usecs);
 
-    usecs = test_stencil_static_instance<Order, stencil_impl::map_reduce, long (&)[N][N], N, N>(a, b, c);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_stencil_static_instance<Order, stencil_impl::map, data_type (&)[N][N], N, N>(a, b, c);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_stencil_static_instance<Order, stencil_impl::map_reduce, data_type (&)[N][N], N, N>(a, b, c);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    std::cout << std::endl;
 
     delete [] &a;
     delete [] &b;
@@ -233,95 +242,133 @@ void test_stencil_static()
 template <size_t Order, size_t N>
 void test_stencil()
 {
-    print_banner("2D stencil (array)");
+    array<data_type[N][N]> a;
+    array<data_type[N][N]> b;
+    array<data_type[N][N]> c;
 
-    array<long[N][N]> a;
-    array<long[N][N]> b;
-    array<long[N][N]> c;
+    std::cout << "A:" << Order << "_" << N << ",";
 
-    auto usecs = test_stencil_static_instance<Order, stencil_impl::pure, array<long[N][N]>, N, N>(a, b, c);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::vector<size_t> usecs(Iterations);
 
-    usecs = test_stencil_static_instance<Order, stencil_impl::map, array<long[N][N]>, N, N>(a, b, c);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_stencil_static_instance<Order, stencil_impl::pure, array<data_type[N][N]>, N, N>(a, b, c);
+    }
+    print_stats(usecs);
 
-    usecs = test_stencil_static_instance<Order, stencil_impl::map_reduce, array<long[N][N]>, N, N>(a, b, c);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_stencil_static_instance<Order, stencil_impl::map, array<data_type[N][N]>, N, N>(a, b, c);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_stencil_static_instance<Order, stencil_impl::map_reduce, array<data_type[N][N]>, N, N>(a, b, c);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    std::cout << std::endl;
 }
 
 template <size_t Order, size_t N>
 void test_stencil_dyn()
 {
-    print_banner("2D stencil (dynarray)");
-
-    using array_type = dynarray<long, 2>;
+    using array_type = dynarray<data_type, 2>;
     array_type a(N, N);
     array_type b(N, N);
+    array_type c(N, N);
 
-    array_type c(N, N), c_gold(N, N);
+    std::cout << "D:" << Order << "_" << N << ",";
 
-    auto usecs = test_stencil_dyn_instance<Order, stencil_impl::pure, array_type>(a, b, c, N, N);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::vector<size_t> usecs(Iterations);
 
-    usecs = test_stencil_dyn_instance<Order, stencil_impl::map, array_type>(a, b, c, N, N);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_stencil_dyn_instance<Order, stencil_impl::pure, array_type>(a, b, c, N, N);
+    }
+    print_stats(usecs);
 
-    usecs = test_stencil_dyn_instance<Order, stencil_impl::map_reduce, array_type>(a, b, c, N, N);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_stencil_dyn_instance<Order, stencil_impl::map, array_type>(a, b, c, N, N);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_stencil_dyn_instance<Order, stencil_impl::map_reduce, array_type>(a, b, c, N, N);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    std::cout << std::endl;
 }
 
 template <size_t Order, size_t N>
 void test_stencil_boost()
 {
-    print_banner("2D stencil (boost::multi_array)");
-
-    typedef boost::multi_array<long, 2> array_type;
+    typedef boost::multi_array<data_type, 2> array_type;
 
     array_type a(boost::extents[N][N]);
     array_type b(boost::extents[N][N]);
     array_type c(boost::extents[N][N]);
 
-    auto usecs = test_stencil_dyn_instance<Order, stencil_impl::pure, array_type>(a, b, c, N, N);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::cout << "B:" << Order << "_" << N << ",";
 
-    usecs = test_stencil_dyn_instance<Order, stencil_impl::map, array_type>(a, b, c, N, N);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::vector<size_t> usecs(Iterations);
 
-    test_stencil_dyn_instance<Order, stencil_impl::map_reduce, array_type>(a, b, c, N, N);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_stencil_dyn_instance<Order, stencil_impl::pure, array_type>(a, b, c, N, N);
+    }
+    print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_stencil_dyn_instance<Order, stencil_impl::map, array_type>(a, b, c, N, N);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_stencil_dyn_instance<Order, stencil_impl::map_reduce, array_type>(a, b, c, N, N);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    std::cout << std::endl;
+}
+
+template <size_t Order, size_t N>
+void test_instance()
+{
+    test_stencil_static<Order, N>();
+    test_stencil<Order, N>();
+    test_stencil_dyn<Order, N>();
+#if 0
+    test_stencil_boost<Order, N>();
+#endif
 }
 
 void test_stencil()
 {
-    test_stencil_static<4, 100>();
-    test_stencil<4, 100>();
-    test_stencil_dyn<4, 100>();
-    test_stencil_boost<4, 100>();
+    test_instance<1, 100>();
+    test_instance<1, 200>();
+    test_instance<1, 400>();
+    test_instance<1, 800>();
+    test_instance<1, 1600>();
+    test_instance<1, 3200>();
 
-    test_stencil_static<4, 1000>();
-    test_stencil<4, 1000>();
-    test_stencil_dyn<4, 1000>();
-    test_stencil_boost<4, 1000>();
+    test_instance<2, 100>();
+    test_instance<2, 200>();
+    test_instance<2, 400>();
+    test_instance<2, 800>();
+    test_instance<2, 1600>();
+    test_instance<2, 3200>();
 
-    test_stencil_static<4, 10000>();
-    test_stencil<4, 10000>();
-    test_stencil_dyn<4, 10000>();
-    test_stencil_boost<4, 10000>();
+    test_instance<4, 100>();
+    test_instance<4, 200>();
+    test_instance<4, 400>();
+    test_instance<4, 800>();
+    test_instance<4, 1600>();
+    test_instance<4, 3200>();
 
-    test_stencil_static<8, 100>();
-    test_stencil<8, 100>();
-    test_stencil_dyn<8, 100>();
-    test_stencil_boost<8, 100>();
-
-    test_stencil_static<8, 1000>();
-    test_stencil<8, 1000>();
-    test_stencil_dyn<8, 1000>();
-    test_stencil_boost<8, 1000>();
-
-    test_stencil_static<8, 10000>();
-    test_stencil<8, 10000>();
-    test_stencil_dyn<8, 10000>();
-    test_stencil_boost<8, 10000>();
+    test_instance<8, 100>();
+    test_instance<8, 200>();
+    test_instance<8, 400>();
+    test_instance<8, 800>();
+    test_instance<8, 1600>();
+    test_instance<8, 3200>();
 }
 
 int main(int argc, char *argv[])

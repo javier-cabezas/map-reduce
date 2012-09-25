@@ -14,12 +14,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * afloat with this program; if not, write to the Free Software
+ * adata_type with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  * }}}
  */
 
-#include <chrono>
 #include <iostream>
 #include <string>
 
@@ -46,9 +45,9 @@ enum class convolution_impl {
 };
 
 template <int Order, convolution_impl Impl, typename T1, typename T2, size_t N, size_t M, bool Test = DoTest>
-size_t test_convolution_static_instance(T1 &a, T1 &b, T1 &c, const T2 &conv)
+size_t test_convolution_static_instance(T1 &a, T1 &b, T1 &c, T2 &conv)
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
+    my_time_point start, end;
 
     map([&](int i, int j)
         {
@@ -60,14 +59,21 @@ size_t test_convolution_static_instance(T1 &a, T1 &b, T1 &c, const T2 &conv)
         },
         make_range(N, M));
 
+    map([&](int i, int j)
+        {
+            conv[i][j] = i + j;
+        },
+        make_range(2 * Order + 1,
+                   2 * Order + 1));
+
     fill_cache();
 
-    start = std::chrono::system_clock::now();
+    start = my_clock::now();
 
     if (Impl == convolution_impl::pure || Test) {
         for (unsigned i = Order; i < N - Order; ++i) {
             for (unsigned j = Order; j < M - Order; ++j) {
-                float tmp = a[i][j];
+                data_type tmp = a[i][j];
                 for (int k1 = 0; k1 < 2 * Order + 1; ++k1) {
                     for (int k2 = 0; k2 < 2 * Order + 1; ++k2) {
                         tmp += conv[k1][k2] * a[i - Order + k1][j - Order + k2];
@@ -86,7 +92,7 @@ size_t test_convolution_static_instance(T1 &a, T1 &b, T1 &c, const T2 &conv)
     if (Impl == convolution_impl::map) {
         map([&](int i, int j)
             {
-                float tmp = a[i][j];
+                data_type tmp = a[i][j];
                 for (int k1 = 0; k1 < 2 * Order + 1; ++k1) {
                     for (int k2 = 0; k2 < 2 * Order + 1; ++k2) {
                         tmp += conv[k1][k2] * a[i - Order + k1][j - Order + k2];
@@ -95,8 +101,8 @@ size_t test_convolution_static_instance(T1 &a, T1 &b, T1 &c, const T2 &conv)
 
                 b[i][j] = tmp;
             },
-            make_range(dim<int>({ Order, int(N) - Order}),
-                       dim<int>({ Order, int(M) - Order})));
+            make_range(dim<int>(Order, int(N) - Order),
+                       dim<int>(Order, int(M) - Order)));
     }
 
     if (Test) {
@@ -106,31 +112,31 @@ size_t test_convolution_static_instance(T1 &a, T1 &b, T1 &c, const T2 &conv)
     if (Impl == convolution_impl::map_reduce) {
         map([&](int i, int j)
             {
-                b[i][j] = a[i][j] + reduce([&](int k1, int k2)
-                                           {
-                                                return conv[k1][k2] * a[i - Order + k1][j - Order + k2];
-                                           },
-                                           reduce_ops<float>::add,
-                                           make_range(dim<int>(2 * Order + 1),
-                                                      dim<int>(2 * Order + 1)));
+                b[i][j] = reduce([&](int k1, int k2)
+                                 {
+                                      return conv[k1][k2] * a[i - Order + k1][j - Order + k2];
+                                 },
+                                 reduce_ops<data_type>::add,
+                                 make_range(dim<int>(2 * Order + 1),
+                                            dim<int>(2 * Order + 1)));
             },
-            make_range(dim<int>({ Order, int(N) - Order}),
-                       dim<int>({ Order, int(M) - Order})));
+            make_range(dim<int>(Order, int(N) - Order),
+                       dim<int>(Order, int(M) - Order)));
     }
 
     if (Test) {
         //assert(b == c);
     }
 
-    end = std::chrono::system_clock::now();
+    end = my_clock::now();
 
-    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    return microsecond_cast(end - start).count();
 }
 
 template <int Order, convolution_impl Impl, typename T, bool Test = DoTest>
-size_t test_convolution_dyn_instance(T &a, T &b, T &c, const T &conv, size_t N, size_t M)
+size_t test_convolution_dyn_instance(T &a, T &b, T &c, T &conv, size_t N, size_t M)
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
+    my_time_point start, end;
 
     map([&](int i, int j)
         {
@@ -142,14 +148,21 @@ size_t test_convolution_dyn_instance(T &a, T &b, T &c, const T &conv, size_t N, 
         },
         make_range(N, M));
 
+    map([&](int i, int j)
+        {
+            conv[i][j] = i + j;
+        },
+        make_range(2 * Order + 1,
+                   2 * Order + 1));
+
     fill_cache();
 
-    start = std::chrono::system_clock::now();
+    start = my_clock::now();
 
     if (Impl == convolution_impl::pure || Test) {
         for (unsigned i = Order; i < N - Order; ++i) {
             for (unsigned j = Order; j < M - Order; ++j) {
-                float tmp = a[i][j];
+                data_type tmp = 0.f;
                 for (int k1 = 0; k1 < 2 * Order + 1; ++k1) {
                     for (int k2 = 0; k2 < 2 * Order + 1; ++k2) {
                         tmp += conv[k1][k2] * a[i - Order + k1][j - Order + k2];
@@ -168,7 +181,7 @@ size_t test_convolution_dyn_instance(T &a, T &b, T &c, const T &conv, size_t N, 
     if (Impl == convolution_impl::map || Test) {
         map([&](int i, int j)
             {
-                float tmp = a[i][j];
+                data_type tmp = 0.f;
                 for (int k1 = 0; k1 < 2 * Order + 1; ++k1) {
                     for (int k2 = 0; k2 < 2 * Order + 1; ++k2) {
                         tmp += conv[k1][k2] * a[i - Order + k1][j - Order + k2];
@@ -177,8 +190,8 @@ size_t test_convolution_dyn_instance(T &a, T &b, T &c, const T &conv, size_t N, 
 
                 b[i][j] = tmp;
             },
-            make_range(dim<int>({ Order, int(N) - Order}),
-                       dim<int>({ Order, int(M) - Order})));
+            make_range(dim<int>(Order, int(N) - Order),
+                       dim<int>(Order, int(M) - Order)));
     }
 
     if (Test) {
@@ -188,59 +201,76 @@ size_t test_convolution_dyn_instance(T &a, T &b, T &c, const T &conv, size_t N, 
     if (Impl == convolution_impl::map_reduce || Test) {
         map([&](int i, int j)
             {
-                b[i][j] = a[i][j] + reduce([&](int k1, int k2)
-                                           {
-                                                return conv[k1][k2] * a[i - Order + k1][j - Order + k2];
-                                           },
-                                           reduce_ops<float>::add,
-                                           make_range(dim<int>(Order + 1),
-                                                      dim<int>(Order + 1)));
+                b[i][j] = reduce([&](int k1, int k2)
+                                 {
+                                      return conv[k1][k2] * a[i - Order + k1][j - Order + k2];
+                                 },
+                                 reduce_ops<data_type>::add,
+                                 make_range(dim<int>(2 * Order + 1),
+                                            dim<int>(2 * Order + 1)));
 
             },
-            make_range(dim<int>({ Order, int(N) - Order}),
-                       dim<int>({ Order, int(M) - Order})));
+            make_range(dim<int>(Order, int(N) - Order),
+                       dim<int>(Order, int(M) - Order)));
     }
 
     if (Test) {
-        assert(b == c);
+        map([&](int i, int j)
+            {
+                if (b[i][j] != c[i][j]) {
+                    printf("(%d, %d) Expected %f, got %f\n", i, j, b[i][j], c[i][j]);
+                }
+            },
+            make_range(N, M));
+        //assert(b == c);
     }
 
-    end = std::chrono::system_clock::now();
+    end = my_clock::now();
 
-    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    return microsecond_cast(end - start).count();
 }
 
 template <size_t Order, size_t N>
 void test_convolution_static()
 {
-    print_banner("2D convolution (static)");
+    data_type (&a)[N][N] = *(data_type (*)[N][N]) new data_type[N * N];
+    data_type (&b)[N][N] = *(data_type (*)[N][N]) new data_type[N * N];
+    data_type (&c)[N][N] = *(data_type (*)[N][N]) new data_type[N * N];
 
-    float (&a)[N][N] = *(float (*)[N][N]) new float[N * N];
-    float (&b)[N][N] = *(float (*)[N][N]) new float[N * N];
-    float (&c)[N][N] = *(float (*)[N][N]) new float[N * N];
+    data_type (&conv)[2 * Order + 1][2 * Order + 1] = *(data_type (*)[2 * Order + 1][2 * Order + 1]) new data_type[(2 * Order + 1) * (2 * Order + 1)];
 
-    float (&conv)[2 * Order + 1][2 * Order + 1] = *(float (*)[2 * Order + 1][2 * Order + 1]) new float[(2 * Order + 1) * (2 * Order + 1)];
+    std::cout << "S:" << Order << "_" << N << ",";
 
-    auto usecs = test_convolution_static_instance<Order,
+    std::vector<size_t> usecs(Iterations);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_convolution_static_instance<Order,
                                                   convolution_impl::pure,
-                                                  float (&)[N][N],
-                                                  float (&)[2 * Order + 1][2 * Order + 1],
+                                                  data_type (&)[N][N],
+                                                  data_type (&)[2 * Order + 1][2 * Order + 1],
                                                   N, N>(a, b, c, conv);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    }
+    print_stats(usecs);
 
-    usecs = test_convolution_static_instance<Order,
-                                             convolution_impl::map,
-                                             float (&)[N][N],
-                                             float (&)[2 * Order + 1][2 * Order + 1],
-                                             N, N>(a, b, c, conv);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_convolution_static_instance<Order,
+                                                  convolution_impl::map,
+                                                  data_type (&)[N][N],
+                                                  data_type (&)[2 * Order + 1][2 * Order + 1],
+                                                  N, N>(a, b, c, conv);
+    }
+    std::cout << ","; print_stats(usecs);
 
-    usecs = test_convolution_static_instance<Order,
-                                             convolution_impl::map_reduce,
-                                             float (&)[N][N],
-                                             float (&)[2 * Order + 1][2 * Order + 1],
-                                             N, N>(a, b, c, conv);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_convolution_static_instance<Order,
+                                                  convolution_impl::map_reduce,
+                                                  data_type (&)[N][N],
+                                                  data_type (&)[2 * Order + 1][2 * Order + 1],
+                                                  N, N>(a, b, c, conv);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    std::cout << std::endl;
 
     delete [] &a;
     delete [] &b;
@@ -252,64 +282,88 @@ void test_convolution_static()
 template <size_t Order, size_t N>
 void test_convolution()
 {
-    print_banner("2D convolution (array)");
+    array<data_type[N][N]> a;
+    array<data_type[N][N]> b;
+    array<data_type[N][N]> c;
 
-    array<float[N][N]> a;
-    array<float[N][N]> b;
-    array<float[N][N]> c;
+    array<data_type[2 * Order + 1][2 * Order + 1]> conv;
 
-    array<float[2 * Order + 1][2 * Order + 1]> conv;
+    std::cout << "A:" << Order << "_" << N << ",";
 
-    auto usecs = test_convolution_static_instance<Order,
+    std::vector<size_t> usecs(Iterations);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_convolution_static_instance<Order,
                                                   convolution_impl::pure,
-                                                  array<float[N][N]>,
-                                                  array<float[2 * Order + 1][2 * Order + 1]>,
+                                                  array<data_type[N][N]>,
+                                                  array<data_type[2 * Order + 1][2 * Order + 1]>,
                                                   N, N>(a, b, c, conv);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    }
+    print_stats(usecs);
 
-    usecs = test_convolution_static_instance<Order,
-                                             convolution_impl::map,
-                                             array<float[N][N]>,
-                                             array<float[2 * Order + 1][2 * Order + 1]>,
-                                             N, N>(a, b, c, conv);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_convolution_static_instance<Order,
+                                                  convolution_impl::map,
+                                                  array<data_type[N][N]>,
+                                                  array<data_type[2 * Order + 1][2 * Order + 1]>,
+                                                  N, N>(a, b, c, conv);
+    }
+    std::cout << ","; print_stats(usecs);
 
-    usecs = test_convolution_static_instance<Order,
-                                             convolution_impl::map_reduce,
-                                             array<float[N][N]>,
-                                             array<float[2 * Order + 1][2 * Order + 1]>,
-                                             N, N>(a, b, c, conv);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_convolution_static_instance<Order,
+                                                  convolution_impl::map_reduce,
+                                                  array<data_type[N][N]>,
+                                                  array<data_type[2 * Order + 1][2 * Order + 1]>,
+                                                  N, N>(a, b, c, conv);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    std::cout << std::endl;
 }
 
 template <size_t Order, size_t N>
 void test_convolution_dyn()
 {
-    print_banner("2D convolution (dynarray)");
-
-    using array_type = dynarray<float, 2>;
+    using array_type = dynarray<data_type, 2>;
     array_type a(N, N);
     array_type b(N, N);
     array_type c(N, N);
 
     array_type conv(2 * Order + 1, 2 * Order + 1);
 
-    auto usecs = test_convolution_dyn_instance<Order, convolution_impl::pure, array_type>(a, b, c, conv, N, N);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::cout << "D:" << Order << "_" << N << ",";
 
-    usecs = test_convolution_dyn_instance<Order, convolution_impl::map, array_type>(a, b, c, conv, N, N);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::vector<size_t> usecs(Iterations);
 
-    usecs = test_convolution_dyn_instance<Order, convolution_impl::map_reduce, array_type>(a, b, c, conv, N, N);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_convolution_dyn_instance<Order,
+                                               convolution_impl::pure,
+                                               array_type>(a, b, c, conv, N, N);
+    }
+    print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_convolution_dyn_instance<Order,
+                                               convolution_impl::map,
+                                               array_type>(a, b, c, conv, N, N);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_convolution_dyn_instance<Order,
+                                               convolution_impl::map_reduce,
+                                               array_type>(a, b, c, conv, N, N);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    std::cout << std::endl;
 }
 
 template <size_t Order, size_t N>
 void test_convolution_boost()
 {
-    print_banner("2D convolution (boost::multi_array)");
-
-    typedef boost::multi_array<float, 2> array_type;
+    typedef boost::multi_array<data_type, 2> array_type;
 
     array_type a(boost::extents[N][N]);
     array_type b(boost::extents[N][N]);
@@ -317,47 +371,73 @@ void test_convolution_boost()
 
     array_type conv(boost::extents[2 * Order + 1][2 * Order + 1]);
 
-    auto usecs = test_convolution_dyn_instance<Order, convolution_impl::pure, array_type>(a, b, c, conv, N, N);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::cout << "B:" << Order << "_" << N << ",";
 
-    usecs = test_convolution_dyn_instance<Order, convolution_impl::map, array_type>(a, b, c, conv, N, N);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::vector<size_t> usecs(Iterations);
 
-    test_convolution_dyn_instance<Order, convolution_impl::map_reduce, array_type>(a, b, c, conv, N, N);
-    std::cout << "[" << Order << "] " << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_convolution_dyn_instance<Order,
+                                                  convolution_impl::pure,
+                                                  array_type>(a, b, c, conv, N, N);
+    }
+    print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_convolution_dyn_instance<Order,
+                                                  convolution_impl::map,
+                                                  array_type>(a, b, c, conv, N, N);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_convolution_dyn_instance<Order,
+                                                  convolution_impl::map_reduce,
+                                                  array_type>(a, b, c, conv, N, N);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    std::cout << std::endl;
+}
+
+template <size_t Order, size_t N>
+void test_instance()
+{
+    test_convolution_static<Order, N>();
+    test_convolution<Order, N>();
+    test_convolution_dyn<Order, N>();
+#if 0
+    test_convolution_boost<Order, N>();
+#endif
 }
 
 void test_convolution()
 {
-    test_convolution_static<1, 100>();
-    test_convolution<1, 100>();
-    test_convolution_dyn<1, 100>();
-    test_convolution_boost<1, 100>();
+    test_instance<1, 200>();
+    test_instance<1, 400>();
+    test_instance<1, 800>();
+    test_instance<1, 1600>();
+    test_instance<1, 3200>();
+    
+    test_instance<2, 100>();
+    test_instance<2, 200>();
+    test_instance<2, 400>();
+    test_instance<2, 800>();
+    test_instance<2, 1600>();
+    test_instance<2, 3200>();
 
-    test_convolution_static<1, 1000>();
-    test_convolution<1, 1000>();
-    test_convolution_dyn<1, 1000>();
-    test_convolution_boost<1, 1000>();
+    test_instance<4, 100>();
+    test_instance<4, 200>();
+    test_instance<4, 400>();
+    test_instance<4, 800>();
+    test_instance<4, 1600>();
+    test_instance<4, 3200>();
 
-    test_convolution_static<1, 10000>();
-    test_convolution<1, 10000>();
-    test_convolution_dyn<1, 10000>();
-    test_convolution_boost<1, 10000>();
-
-    test_convolution_static<2, 100>();
-    test_convolution<2, 100>();
-    test_convolution_dyn<2, 100>();
-    test_convolution_boost<2, 100>();
-
-    test_convolution_static<2, 1000>();
-    test_convolution<2, 1000>();
-    test_convolution_dyn<2, 1000>();
-    test_convolution_boost<2, 1000>();
-
-    test_convolution_static<2, 10000>();
-    test_convolution<2, 10000>();
-    test_convolution_dyn<2, 10000>();
-    test_convolution_boost<2, 10000>();
+    test_instance<8, 100>();
+    test_instance<8, 200>();
+    test_instance<8, 400>();
+    test_instance<8, 800>();
+    test_instance<8, 1600>();
+    test_instance<8, 3200>();
 }
 
 int main(int argc, char *argv[])

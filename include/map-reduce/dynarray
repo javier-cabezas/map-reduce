@@ -21,12 +21,14 @@ private:
     const size_t *suboffs_;
 
 protected:
+    inline
     explicit dynarray_info(const size_t *sizes, const size_t *offs) :
         subsizes_(sizes),
         suboffs_(offs)
     {
     }
 
+    inline
     explicit dynarray_info(const dynarray_info<T, Sub + 1, Dims> &parent) :
         subsizes_(parent.subsizes_ + 1),
         suboffs_(parent.suboffs_ + 1)
@@ -35,18 +37,21 @@ protected:
 
 public:
     static const size_t dims = Dims;
-    
+
+    inline
     size_t get_size(unsigned dim) const
     {
         return subsizes_[dim];
     }
 
+    inline
     size_t get_offset(unsigned dim) const
     {
         return suboffs_[dim];
     }
 
     template <unsigned Dim>
+    inline
     size_t get_total_offset(size_t idx) const
     {
         // For the last level we just return the given index
@@ -54,6 +59,7 @@ public:
     }
 
     template <unsigned Dim, typename... Idx>
+    inline
     size_t get_total_offset(size_t idx, Idx... idxs) const
     {
         return idx * suboffs_[Dim] +
@@ -71,6 +77,7 @@ public:
         return ret;
     }
 
+    inline
     const size_t *range() const
     {
         return subsizes_;
@@ -93,12 +100,14 @@ class subarray :
 protected:
     T *subdata_;
 
+    inline
     subarray(T *data, const size_t *sizes, const size_t *offs) :
         dynarray_info<T, Sub, Dims>(sizes, offs),
         subdata_(data)
     {
     }
 
+    inline
     subarray(subarray<T, Sub + 1, Dims> &parent, T *data) :
         dynarray_info<T, Sub, Dims>(parent),
         subdata_(data)
@@ -106,12 +115,14 @@ protected:
     }
 
 public:
+    inline
     subarray<T, Sub - 1, Dims> operator[](unsigned idx)
     {
         size_t off = parent_info::get_offset(0);
         return subarray<T, Sub - 1, Dims>(*this, &subdata_[idx * off]);
     }
 
+    inline
     const_subarray<T, Sub - 1, Dims> operator[](unsigned idx) const
     {
         size_t off = parent_info::get_offset(0);
@@ -119,6 +130,7 @@ public:
     }
 
     template <typename... Idx>
+    inline
     T &operator()(Idx... idxs)
     {
         static_assert(Dims == sizeof...(idxs), "Number of dimensions do not match");
@@ -127,6 +139,7 @@ public:
     }
 
     template <typename... Idx>
+    inline
     const T &operator()(Idx... idxs) const
     {
         static_assert(Dims == sizeof...(idxs), "Number of dimensions do not match");
@@ -156,12 +169,14 @@ class const_subarray :
     friend class const_subarray<T, Sub - 1, Dims>;
 
 protected:
+    inline
     const_subarray(const subarray<T, Sub + 1, Dims> &parent, const T *data) :
         dynarray_info<T, Sub, Dims>(parent),
         subdata_(data)
     {
     }
 
+    inline
     const_subarray(const_subarray<T, Sub + 1, Dims> &parent, const T *data) :
         dynarray_info<T, Sub, Dims>(parent),
         subdata_(data)
@@ -171,6 +186,7 @@ protected:
 public:
     static const size_t dims = Dims;
     
+    inline
     const_subarray<T, Sub - 1, Dims> operator[](unsigned idx) const
     {
         size_t off = parent_info::get_offset(0);
@@ -178,6 +194,7 @@ public:
     }
 
     template <typename... Idx>
+    inline
     const T &operator()(Idx... idxs) const
     {
         static_assert(Dims == sizeof...(idxs), "Number of dimensions do not match");
@@ -216,6 +233,7 @@ class subarray<T, 1, Dims> :
 protected:
     T *subdata_;
 
+    inline
     subarray(subarray<T, 2, Dims> &parent, T *data) :
         dynarray_info<T, 1, Dims>(parent),
         subdata_(data)
@@ -223,21 +241,25 @@ protected:
     }
 
 public:
+    inline
     T &operator[](unsigned idx)
     {
         return subdata_[idx];
     }
 
+    inline
     const T &operator[](unsigned idx) const
     {
         return subdata_[idx];
     }
 
+    inline
     T &operator()(unsigned idx)
     {
         return subdata_[idx];
     }
 
+    inline
     const T &operator()(unsigned idx) const
     {
         return subdata_[idx];
@@ -253,12 +275,14 @@ class const_subarray<T, 1, Dims> :
     friend class const_subarray<T, 2, Dims>;
 
 protected:
+    inline
     const_subarray(const subarray<T, 2, Dims> &parent, const T *data) :
         dynarray_info<T, 1, Dims>(parent),
         subdata_(data)
     {
     }
 
+    inline
     const_subarray(const_subarray<T, 2, Dims> &parent, const T *data) :
         dynarray_info<T, 1, Dims>(parent),
         subdata_(data)
@@ -266,11 +290,13 @@ protected:
     }
 
 public:
+    inline
     const T &operator[](unsigned idx) const
     {
         return subdata_[idx];
     }
 
+    inline
     const T &operator()(unsigned idx) const
     {
         return subdata_[idx];

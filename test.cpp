@@ -122,6 +122,8 @@ int test_reduction_sum_2d()
                      make_range(N, M));
 
     assert(sum == ((N + 1) * N / 2) * M);
+
+    return 0;
 }
 
 template <size_t N>
@@ -272,6 +274,8 @@ int test_reduction()
     end = std::chrono::system_clock::now();
 
     std::cout << "Max 2D: " << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " usecs " << std::endl;
+
+    return 0;
 }
 
 template <typename T, size_t N, size_t M>

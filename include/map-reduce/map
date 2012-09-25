@@ -37,96 +37,99 @@ namespace map_sched {
     using automatic = serial;
 };
 
-template <unsigned NDims, unsigned Level, typename Func, typename Range, typename Policy>
+template <unsigned Level, typename Func, typename Range, typename Policy>
 struct wrapper_map {
     template<typename... Args>
+    inline
     static void
-    map(Func f, const Range &r, const Policy &p, Args... args)
+    map(Func f, Range r, Args... args)
     {
         using mydim = typename Range::dim_type;
 
         mydim d = r.get_dim(sizeof...(Args));
 
-        if ((p.when == map_sched::base_policy::always &&
-             p.level == NDims - Level) ||
-            (p.when == map_sched::base_policy::root &&
-             p.level == NDims - Level &&
+        if ((Policy::when == map_sched::base_policy::always &&
+             Policy::level == Range::NDims - Level) ||
+            (Policy::when == map_sched::base_policy::root &&
+             Policy::level == Range::NDims - Level &&
              !in_parallel)) {
             #pragma omp parallel for
             for (typename Range::type t  = d.begin;
                                       t  < d.end;
                                       t += d.step) {
-                in_parallel = true;
-                wrapper_map<NDims, Level - 1, Func, Range, Policy>::map(f, r, p, args..., t);
+                //in_parallel = true;
+                wrapper_map<Level - 1, Func, Range, Policy>::map(f, r, args..., t);
             }
         } else {
             for (typename Range::type t  = d.begin;
                                       t  < d.end;
                                       t += d.step) {
-                wrapper_map<NDims, Level - 1, Func, Range, Policy>::map(f, r, p, args..., t);
+                wrapper_map<Level - 1, Func, Range, Policy>::map(f, r, args..., t);
             }
         }
     }
 
+    inline
     static void
-    map(Func f, const Range &r, const Policy &p)
+    map(Func f, Range r)
     {
         using mydim = typename Range::dim_type;
 
         mydim d = r.get_dim(0);
 
-        if ((p.when == map_sched::base_policy::always &&
-             p.level == NDims - Level) ||
-            (p.when == map_sched::base_policy::root &&
-             p.level == NDims - Level &&
+        if ((Policy::when == map_sched::base_policy::always &&
+             Policy::level == Range::NDims - Level) ||
+            (Policy::when == map_sched::base_policy::root &&
+             Policy::level == Range::NDims - Level &&
              !in_parallel)) {
-            //printf("<M> Parallel: %u\n", NDims - Level);
             #pragma omp parallel for
             for (typename Range::type t  = d.begin;
                                       t  < d.end;
                                       t += d.step) {
-                in_parallel = true;
-                wrapper_map<NDims, Level - 1, Func, Range, Policy>::map(f, r, p, t);
+                //in_parallel = true;
+                wrapper_map<Level - 1, Func, Range, Policy>::map(f, r, t);
             }
 
-            if (NDims == Level) {
-                in_parallel = false;
+            if (Range::NDims == Level) {
+                //in_parallel = false;
             }
         } else {
-            //printf("<M> NOT Parallel: %u\n", NDims - Level);
             for (typename Range::type t  = d.begin;
                                       t  < d.end;
                                       t += d.step) {
-                wrapper_map<NDims, Level - 1, Func, Range, Policy>::map(f, r, p, t);
+                wrapper_map<Level - 1, Func, Range, Policy>::map(f, r, t);
             }
 
-            if (NDims == Level) {
-                in_parallel = false;
+            if (Range::NDims == Level) {
+                //in_parallel = false;
             }
         }
     }
 };
 
-template <unsigned NDims, typename Func, typename Range, typename Policy>
-struct wrapper_map<NDims, 0, Func, Range, Policy> {
+template <typename Func, typename Range, typename Policy>
+struct wrapper_map<0, Func, Range, Policy> {
     template<typename... Args>
+    inline
     static void
-    map(Func f, const Range &r, const Policy &p, Args ... args)
+    map(Func f, Range r, Args ... args)
     {
         f(args...);
     }
 };
 
 template <typename Func, typename Range, typename Policy>
+inline
 static
-void map(Func f, const Range &r, const Policy &p)
+void map(Func f, Range r, const Policy &/* p */)
 {
-    wrapper_map<Range::NDims, Range::NDims, Func, Range, Policy>::map(f, r, p);
+    wrapper_map<Range::NDims, Func, Range, Policy>::map(f, r);
 }
 
 template <typename Func, typename Range>
+inline
 static
-void map(Func f, const Range &r)
+void map(Func f, Range r)
 {
     map(f, r, map_sched::automatic());
 }

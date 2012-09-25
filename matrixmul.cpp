@@ -14,12 +14,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * afloat with this program; if not, write to the Free Software
+ * adata_type with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  * }}}
  */
 
-#include <chrono>
 #include <iostream>
 #include <string>
 
@@ -30,26 +29,14 @@
 
 #include <boost/multi_array.hpp>
 
+#include "common.hpp"
+
 #define C1 2.3f
 #define C2 3.2f
 #define C3 1.7f
 #define C4 4.9f
 
 using namespace map_reduce;
-
-void print_banner(const std::string &name)
-{
-    std::cout << std::string(name.size(), '=') << std::endl;
-    std::cout << name << std::endl;
-    std::cout << std::string(name.size(), '=') << std::endl;
-}
-
-template <typename T>
-int func_greater(T x, T y)
-{
-    if (x > y) return x;
-    return y;
-}
 
 template <typename T>
 void test_matrixmul_gold(T &c, const T &a, const T &b, size_t N, size_t M)
@@ -74,7 +61,7 @@ enum class matrixmul_impl {
 template <matrixmul_impl Impl, typename T, size_t N, size_t M>
 size_t test_matrixmul_static_instance(T &c, T &a, T &b)
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
+    my_time_point start, end;
 
     map([&](int i, int j)
         {
@@ -83,12 +70,14 @@ size_t test_matrixmul_static_instance(T &c, T &a, T &b)
         },
         make_range(N, M));
 
-    start = std::chrono::system_clock::now();
+    fill_cache();
+
+    start = my_clock::now();
 
     if (Impl == matrixmul_impl::pure) {
         for (unsigned i = 0; i < N; ++i) {
             for (unsigned j = 0; j < M; ++j) {
-                float tmp = 0;
+                data_type tmp = 0;
                 for (unsigned k = 0; k < N; ++k) {
                     tmp += a[i][k] * b[k][j];
                 }
@@ -100,7 +89,7 @@ size_t test_matrixmul_static_instance(T &c, T &a, T &b)
     if (Impl == matrixmul_impl::map) {
         map([&](int i, int j)
             {
-                float tmp = 0;
+                data_type tmp = 0;
                 for (unsigned k = 0; k < N; ++k) {
                     tmp += a[i][k] * b[k][j];
                 }
@@ -116,21 +105,21 @@ size_t test_matrixmul_static_instance(T &c, T &a, T &b)
                                  {
                                      return a[i][k] * b[k][j];
                                  },
-                                 reduce_ops<float>::add,
+                                 reduce_ops<data_type>::add,
                                  make_range(N));
             },
             make_range(N, M));
     }
 
-    end = std::chrono::system_clock::now();
+    end = my_clock::now();
 
-    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    return microsecond_cast(end - start).count();
 }
 
 template <matrixmul_impl Impl, typename T>
 size_t test_matrixmul_dyn_instance(T &c, T &a, T &b, size_t N, size_t M)
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
+    my_time_point start, end;
 
     map([&](int i, int j)
         {
@@ -139,12 +128,14 @@ size_t test_matrixmul_dyn_instance(T &c, T &a, T &b, size_t N, size_t M)
         },
         make_range(N, M));
 
-    start = std::chrono::system_clock::now();
+    fill_cache();
+
+    start = my_clock::now();
 
     if (Impl == matrixmul_impl::pure) {
         for (unsigned i = 0; i < N; ++i) {
             for (unsigned j = 0; j < M; ++j) {
-                float tmp = 0;
+                data_type tmp = 0;
                 for (unsigned k = 0; k < N; ++k) {
                     tmp += a[i][k] * b[k][j];
                 }
@@ -156,7 +147,7 @@ size_t test_matrixmul_dyn_instance(T &c, T &a, T &b, size_t N, size_t M)
     if (Impl == matrixmul_impl::map) {
         map([&](int i, int j)
             {
-                float tmp = 0;
+                data_type tmp = 0;
                 for (unsigned k = 0; k < N; ++k) {
                     tmp += a[i][k] * b[k][j];
                 }
@@ -172,34 +163,44 @@ size_t test_matrixmul_dyn_instance(T &c, T &a, T &b, size_t N, size_t M)
                                  {
                                      return a[i][k] * b[k][j];
                                  },
-                                 reduce_ops<float>::add,
+                                 reduce_ops<data_type>::add,
                                  make_range(N));
             },
             make_range(N, M));
     }
 
-    end = std::chrono::system_clock::now();
+    end = my_clock::now();
 
-    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    return microsecond_cast(end - start).count();
 }
 
 template <size_t N>
 void test_matrixmul_static()
 {
-    print_banner("Matrixmul static");
+    data_type (&a)[N][N] = *(data_type (*)[N][N]) new data_type[N * N];
+    data_type (&b)[N][N] = *(data_type (*)[N][N]) new data_type[N * N];
+    data_type (&c)[N][N] = *(data_type (*)[N][N]) new data_type[N * N];
 
-    float (&a)[N][N] = *(float (*)[N][N]) new float[N * N];
-    float (&b)[N][N] = *(float (*)[N][N]) new float[N * N];
-    float (&c)[N][N] = *(float (*)[N][N]) new float[N * N];
+    std::cout << "S:" << N << ",";
 
-    auto usecs = test_matrixmul_static_instance<matrixmul_impl::pure, float (&)[N][N], N, N>(c, a, b);
-    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::vector<size_t> usecs(Iterations);
 
-    usecs = test_matrixmul_static_instance<matrixmul_impl::map, float (&)[N][N], N, N>(c, a, b);
-    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_matrixmul_static_instance<matrixmul_impl::pure, data_type (&)[N][N], N, N>(c, a, b);
+    }
+    print_stats(usecs);
 
-    usecs = test_matrixmul_static_instance<matrixmul_impl::map_reduce, float (&)[N][N], N, N>(c, a, b);
-    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_matrixmul_static_instance<matrixmul_impl::map, data_type (&)[N][N], N, N>(c, a, b);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_matrixmul_static_instance<matrixmul_impl::map_reduce, data_type (&)[N][N], N, N>(c, a, b);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    std::cout << std::endl;
 
     delete [] &a;
     delete [] &b;
@@ -209,79 +210,114 @@ void test_matrixmul_static()
 template <size_t N>
 void test_matrixmul()
 {
-    print_banner("Matrix matrixmul");
+    array<data_type[N][N]> a;
+    array<data_type[N][N]> b;
+    array<data_type[N][N]> c;
 
-    array<float[N][N]> a;
-    array<float[N][N]> b;
-    array<float[N][N]> c;
+    std::cout << "A:" << N << ",";
 
-    auto usecs = test_matrixmul_static_instance<matrixmul_impl::pure, array<float[N][N]>, N, N>(c, a, b);
-    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::vector<size_t> usecs(Iterations);
 
-    usecs = test_matrixmul_static_instance<matrixmul_impl::map, array<float[N][N]>, N, N>(c, a, b);
-    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_matrixmul_static_instance<matrixmul_impl::pure, array<data_type[N][N]>, N, N>(c, a, b);
+    }
+    print_stats(usecs);
 
-    usecs = test_matrixmul_static_instance<matrixmul_impl::map_reduce, array<float[N][N]>, N, N>(c, a, b);
-    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_matrixmul_static_instance<matrixmul_impl::map, array<data_type[N][N]>, N, N>(c, a, b);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_matrixmul_static_instance<matrixmul_impl::map_reduce, array<data_type[N][N]>, N, N>(c, a, b);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    std::cout << std::endl;
 }
 
 template <size_t N>
 void test_matrixmul_dyn()
 {
-    print_banner("Matrix matrixmul (dynarray)");
-
-    using array_type = dynarray<float, 2>;
+    using array_type = dynarray<data_type, 2>;
     array_type a(N, N);
     array_type b(N, N);
     array_type c(N, N);
 
-    auto usecs = test_matrixmul_dyn_instance<matrixmul_impl::pure, array_type>(c, a, b, N, N);
-    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::cout << "D:" << N << ",";
 
-    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map, array_type>(c, a, b, N, N);
-    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::vector<size_t> usecs(Iterations);
 
-    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map_reduce, array_type>(c, a, b, N, N);
-    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_matrixmul_dyn_instance<matrixmul_impl::pure, array_type>(c, a, b, N, N);
+    }
+    print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_matrixmul_dyn_instance<matrixmul_impl::map, array_type>(c, a, b, N, N);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_matrixmul_dyn_instance<matrixmul_impl::map_reduce, array_type>(c, a, b, N, N);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    std::cout << std::endl;
 }
 
 template <size_t N>
 void test_matrixmul_boost()
 {
-    print_banner("Matrix matrixmul (boost)");
-
-    typedef boost::multi_array<float, 2> array_type;
+    typedef boost::multi_array<data_type, 2> array_type;
 
     array_type a(boost::extents[N][N]);
     array_type b(boost::extents[N][N]);
     array_type c(boost::extents[N][N]);
 
-    auto usecs = test_matrixmul_dyn_instance<matrixmul_impl::pure, array_type>(c, a, b, N, N);
-    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::cout << "B:" << N << ",";
 
-    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map, array_type>(c, a, b, N, N);
-    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    std::vector<size_t> usecs(Iterations);
 
-    usecs = test_matrixmul_dyn_instance<matrixmul_impl::map_reduce, array_type>(c, a, b, N, N);
-    std::cout << N << "x" << N << ": " << usecs << " usecs " << std::endl;
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_matrixmul_dyn_instance<matrixmul_impl::pure, array_type>(c, a, b, N, N);
+    }
+    print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_matrixmul_dyn_instance<matrixmul_impl::map, array_type>(c, a, b, N, N);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    for (unsigned it = 0; it < Iterations; ++it) {
+        usecs[it] = test_matrixmul_dyn_instance<matrixmul_impl::map_reduce, array_type>(c, a, b, N, N);
+    }
+    std::cout << ","; print_stats(usecs);
+
+    std::cout << std::endl;
+}
+
+template <size_t N>
+void test_instance()
+{
+    test_matrixmul_static<N>();
+    test_matrixmul<N>();
+    test_matrixmul_dyn<N>();
+#if 0
+    test_matrixmul_boost<N>();
+#endif
 }
 
 void test_matrixmul()
 {
-    test_matrixmul_static<100>();
-    test_matrixmul<100>();
-    test_matrixmul_dyn<100>();
-    test_matrixmul_boost<100>();
-
-    test_matrixmul_static<500>();
-    test_matrixmul<500>();
-    test_matrixmul_dyn<500>();
-    test_matrixmul_boost<500>();
-
-    test_matrixmul_static<1000>();
-    test_matrixmul<1000>();
-    test_matrixmul_dyn<1000>();
-    test_matrixmul_boost<1000>();
+    test_instance<100>();
+    test_instance<200>();
+    test_instance<300>();
+    test_instance<400>();
+    test_instance<500>();
+    test_instance<600>();
+    test_instance<700>();
+    test_instance<800>();
 }
 
 int main(int argc, char *argv[])
